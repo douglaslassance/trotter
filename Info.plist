@@ -26,6 +26,10 @@
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSLocationUsageDescription</key>
+	<string>Show your current location on the trip map.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Show your current location on the trip map.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>CFBundleDocumentTypes</key>

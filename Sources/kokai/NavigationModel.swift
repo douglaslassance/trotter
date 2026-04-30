@@ -20,6 +20,7 @@ final class NavigationModel {
 
     private(set) var stack: [Level] = []
     private(set) var recentURLs: [URL] = []
+    private var lastModified: [URL: Date] = [:]
 
     var current: Level? { stack.last }
     var canGoBack: Bool { stack.count > 1 }
@@ -31,7 +32,38 @@ final class NavigationModel {
     func open(_ url: URL) throws {
         let level = try makeLevel(at: url)
         stack = [level]
+        recordModified(url)
         recordRecent(url)
+    }
+
+    func reloadIfChanged() {
+        var newStack: [Level] = []
+        var didReload = false
+        for level in stack {
+            if let current = fileModificationDate(at: level.url),
+               let known = lastModified[level.url],
+               current > known {
+                if let reloaded = try? makeLevel(at: level.url) {
+                    newStack.append(reloaded)
+                    lastModified[level.url] = current
+                    didReload = true
+                    continue
+                }
+            }
+            newStack.append(level)
+        }
+        if didReload {
+            stack = newStack
+        }
+    }
+
+    private func fileModificationDate(at url: URL) -> Date? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return attrs?[.modificationDate] as? Date
+    }
+
+    private func recordModified(_ url: URL) {
+        lastModified[url] = fileModificationDate(at: url) ?? Date()
     }
 
     func reopenLast() throws -> Bool {
@@ -79,6 +111,7 @@ final class NavigationModel {
         }
         let level = try makeLevel(at: childURL)
         stack.append(level)
+        recordModified(childURL)
         return true
     }
 

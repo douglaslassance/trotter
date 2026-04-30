@@ -1,5 +1,22 @@
+import AppKit
+import CoreLocation
 import SwiftUI
 import UniformTypeIdentifiers
+
+@MainActor
+final class LocationAuthorizer: NSObject, CLLocationManagerDelegate {
+    static let shared = LocationAuthorizer()
+    private let manager = CLLocationManager()
+
+    override init() {
+        super.init()
+        manager.delegate = self
+    }
+
+    func request() {
+        manager.requestWhenInUseAuthorization()
+    }
+}
 
 @main
 struct KokaiApp: App {
@@ -13,6 +30,7 @@ struct KokaiApp: App {
             ContentView(nav: nav)
                 .frame(minWidth: 600, minHeight: 400)
                 .onAppear {
+                    LocationAuthorizer.shared.request()
                     guard !didAutoReopen else { return }
                     didAutoReopen = true
                     if nav.current == nil {
@@ -36,6 +54,9 @@ struct KokaiApp: App {
                     Button("OK") { loadError = nil }
                 } message: {
                     Text(loadError ?? "")
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    nav.reloadIfChanged()
                 }
         }
         .commands {
