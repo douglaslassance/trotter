@@ -14,14 +14,28 @@ struct KMLDocument {
 
     var startDate: Date? {
         guard let s = attributes["start_date"] else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withFullDate]
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = .current
+        f.locale = Locale(identifier: "en_US_POSIX")
         return f.date(from: s)
     }
 
     func date(forDay day: Int) -> Date? {
         guard let start = startDate else { return nil }
         return Calendar.current.date(byAdding: .day, value: day - 1, to: start)
+    }
+
+    var lastDay: Int {
+        features.flatMap(\.days).max() ?? 1
+    }
+
+    var totalNights: Int {
+        features.reduce(0) { $0 + $1.nights }
+    }
+
+    var endDate: Date? {
+        date(forDay: lastDay)
     }
 
     struct DayTimes {
