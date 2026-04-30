@@ -4,20 +4,111 @@ import CryptoKit
 import MapKit
 import SwiftUI
 
+private func iconForKind(_ kind: String?) -> String {
+    switch kind?.lowercased() {
+    case "city": return "building.2.fill"
+    case "town": return "house.fill"
+    case "village": return "house"
+    case "restaurant", "food", "dining": return "fork.knife"
+    case "park", "natural_park", "nature": return "leaf.fill"
+    case "viewpoint", "lookout": return "eye.fill"
+    case "temple": return "building.columns.fill"
+    case "shrine": return "building.columns"
+    case "museum": return "paintpalette.fill"
+    case "gallery": return "photo.fill"
+    case "landmark": return "star.fill"
+    case "beach": return "water.waves"
+    case "onsen", "hot_spring", "bath": return "drop.fill"
+    case "accommodation", "hotel", "ryokan": return "bed.double.fill"
+    case "shopping", "market": return "bag.fill"
+    case "cave": return "circle.bottomhalf.filled.inverse"
+    case "garden": return "leaf"
+    case "castle": return "shield.fill"
+    case "connection", "transfer": return "arrow.triangle.swap"
+    case "airport": return "airplane"
+    case "station": return "tram.fill"
+    case "port", "harbor": return "ferry.fill"
+    default: return "mappin"
+    }
+}
+
+private func humanizedKind(_ kind: String?) -> String? {
+    guard let kind = kind?.lowercased(), !kind.isEmpty else { return nil }
+    switch kind {
+    case "natural_park": return "Natural Park"
+    case "hot_spring": return "Hot Spring"
+    case "rental_car": return "Rental Car"
+    default:
+        return kind.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+}
+
 private func vehicleIcon(_ vehicle: String?) -> String? {
     guard let v = vehicle?.lowercased(), !v.isEmpty else { return nil }
     switch v {
-    case "shinkansen", "bullet": return "🚅"
-    case "train", "limited_express", "rail": return "🚆"
-    case "tram", "streetcar": return "🚊"
-    case "metro", "subway": return "🚇"
-    case "bus": return "🚌"
-    case "car", "rental_car", "drive": return "🚗"
-    case "ferry", "boat", "ship": return "⛴️"
-    case "bicycle", "bike": return "🚲"
-    case "walk", "foot": return "🚶"
-    case "plane", "flight": return "✈️"
-    default: return "📍"
+    case "shinkansen", "bullet": return "train.side.front.car"
+    case "train", "limited_express", "rail": return "tram.fill"
+    case "tram", "streetcar": return "tram"
+    case "metro", "subway": return "tram.tunnel.fill"
+    case "bus": return "bus.fill"
+    case "car", "rental_car", "drive": return "car.fill"
+    case "ferry", "boat", "ship": return "ferry.fill"
+    case "bicycle", "bike": return "bicycle"
+    case "walk", "foot": return "figure.walk"
+    case "plane", "flight": return "airplane"
+    default: return "mappin"
+    }
+}
+
+private func bookingURL(for feature: KMLFeature, country: String?) -> URL? {
+    if let explicit = feature.attributes["booking_url"], !explicit.isEmpty,
+       let url = URL(string: explicit) {
+        return url
+    }
+    let name = feature.name ?? ""
+    var parts: [String] = []
+    if !name.isEmpty { parts.append(name) }
+    let vehicleTerm = vehicleSearchTerm(feature.vehicle)
+    if !vehicleTerm.isEmpty { parts.append(vehicleTerm) }
+    if let kindTerm = kindSearchTerm(feature.kind) { parts.append(kindTerm) }
+    if let country, !country.isEmpty { parts.append(country) }
+    parts.append(bookingActionTerm(for: feature.kind))
+    guard !parts.isEmpty else { return nil }
+    let query = parts.joined(separator: " ")
+    var components = URLComponents(string: "https://www.google.com/search")
+    components?.queryItems = [URLQueryItem(name: "q", value: query)]
+    return components?.url
+}
+
+private func kindSearchTerm(_ kind: String?) -> String? {
+    switch kind?.lowercased() {
+    case "hotel", "ryokan", "accommodation": return "hotel"
+    case "restaurant", "food", "dining": return "restaurant"
+    default: return nil
+    }
+}
+
+private func bookingActionTerm(for kind: String?) -> String {
+    switch kind?.lowercased() {
+    case "restaurant", "food", "dining": return "reservation"
+    default: return "booking"
+    }
+}
+
+private func vehicleSearchTerm(_ vehicle: String?) -> String {
+    guard let v = vehicle?.lowercased(), !v.isEmpty else { return "" }
+    switch v {
+    case "shinkansen", "bullet": return "shinkansen"
+    case "train", "limited_express", "rail": return "train"
+    case "tram", "streetcar": return "tram"
+    case "metro", "subway": return "metro"
+    case "bus": return "bus"
+    case "car", "rental_car", "drive": return "car rental"
+    case "ferry", "boat", "ship": return "ferry"
+    case "bicycle", "bike": return ""
+    case "walk", "foot": return ""
+    case "plane", "flight": return "flight"
+    default: return ""
     }
 }
 
@@ -48,6 +139,13 @@ private let dayPalette: [Color] = [
     Color(red: 0.45, green: 0.42, blue: 0.85), // Day 7 — indigo
     Color(red: 0.70, green: 0.40, blue: 0.85), // Day 8 — purple
     Color(red: 0.95, green: 0.45, blue: 0.75), // Day 9 — pink
+    Color(red: 0.60, green: 0.20, blue: 0.20), // Day 10 — burgundy
+    Color(red: 0.71, green: 0.40, blue: 0.18), // Day 11 — rust
+    Color(red: 0.71, green: 0.54, blue: 0.18), // Day 12 — ochre
+    Color(red: 0.42, green: 0.56, blue: 0.14), // Day 13 — olive
+    Color(red: 0.18, green: 0.42, blue: 0.43), // Day 14 — petrol
+    Color(red: 0.11, green: 0.30, blue: 0.48), // Day 15 — navy
+    Color(red: 0.36, green: 0.23, blue: 0.49), // Day 16 — deep violet
 ]
 
 private func color(forDay day: Int) -> Color {
@@ -193,12 +291,72 @@ struct ContentView: View {
             } else {
                 EmptyState()
             }
-            BreadcrumbBar(nav: nav)
-                .padding(12)
+            VStack(alignment: .leading, spacing: 8) {
+                BreadcrumbBar(nav: nav)
+                if let level = nav.current {
+                    TripInfoBar(document: level.document)
+                }
+            }
+            .padding(12)
         }
         .onChange(of: nav.current?.id) {
             selectionID = nil
         }
+    }
+}
+
+private struct TripInfoBar: View {
+    let document: KMLDocument
+
+    private var span: (first: Int, last: Int)? {
+        let days = document.features.flatMap(\.days)
+        guard let first = days.min(), let last = days.max() else { return nil }
+        return (first, last)
+    }
+
+    private var numDays: Int? { span.map { $0.last - $0.first + 1 } }
+    private var numNights: Int? { numDays.map { max(0, $0 - 1) } }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let span,
+               let start = document.date(forDay: span.first),
+               let end = document.date(forDay: span.last) {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Text("\(formatDate(start)) to \(formatDate(end))")
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                }
+            }
+            if let numDays {
+                HStack(spacing: 4) {
+                    Image(systemName: "sun.max")
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                    Text("\(numDays) days")
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                }
+            }
+            if let numNights, numNights > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "moon.fill")
+                        .font(.caption.bold())
+                        .foregroundStyle(.indigo)
+                    Text("\(numNights) nights")
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().stroke(AnyShapeStyle(.separator), lineWidth: 0.5))
+        .shadow(radius: 4, y: 2)
     }
 }
 
@@ -254,6 +412,14 @@ private func badgeDetail(forSpan span: Double) -> BadgeDetail {
     return .full
 }
 
+private enum MarkerDetail {
+    case small, full
+}
+
+private func markerDetail(forSpan span: Double) -> MarkerDetail {
+    span > 3.0 ? .small : .full
+}
+
 private struct MapLevelView: View {
     let level: NavigationModel.Level
     @Bindable var nav: NavigationModel
@@ -274,49 +440,56 @@ private struct MapLevelView: View {
             ForEach(level.document.features) { feature in
                 content(for: feature)
             }
+            UserAnnotation()
         }
         .mapStyle(.standard(elevation: .automatic,
                             emphasis: .muted,
                             pointsOfInterest: .excludingAll))
+        .mapControls {
+            MapUserLocationButton()
+            MapCompass()
+        }
         .onMapCameraChange(frequency: .continuous) { ctx in
             latitudeSpan = ctx.region.span.latitudeDelta
         }
-    }
-
-    private func displaysAsConnection(_ feature: KMLFeature) -> Bool {
-        feature.isConnection || !childExists(for: feature)
     }
 
     @MapContentBuilder
     private func content(for feature: KMLFeature) -> some MapContent {
         switch feature {
         case .point(let point):
-            let asConnection = displaysAsConnection(feature)
+            let drillable = childExists(for: feature)
+            let detail = markerDetail(forSpan: latitudeSpan)
+            let markerSize: CGFloat = {
+                switch (detail, drillable) {
+                case (.full, true): return 42
+                case (.full, false): return 28
+                case (.small, true): return 28
+                case (.small, false): return 14
+                }
+            }()
             Annotation("", coordinate: point.coordinate, anchor: .center) {
                 ZStack {
-                    if asConnection {
-                        ConnectionMarker(isSelected: selection == feature.id,
-                                         days: feature.days)
-                    } else {
-                        PlaceMarker(isSelected: selection == feature.id,
-                                    days: feature.days,
-                                    nights: feature.nights)
-                    }
-                    if let name = point.name, !name.isEmpty {
-                        PlaceLabel(text: name, isConnection: asConnection)
+                    PlaceMarker(kind: feature.kind,
+                                isDrillable: drillable,
+                                isSelected: selection == feature.id,
+                                days: feature.days,
+                                nights: feature.nights,
+                                detail: detail)
+                    if detail == .full, let name = point.name, !name.isEmpty {
+                        PlaceLabel(text: name, isDrillable: drillable)
                             .fixedSize()
-                            .offset(y: asConnection ? 18 : 24)
+                            .offset(y: drillable ? 34 : 21)
                             .allowsHitTesting(false)
                     }
                 }
-                .frame(width: asConnection ? 14 : 22,
-                       height: asConnection ? 14 : 22)
+                .frame(width: markerSize, height: markerSize)
                 .popover(isPresented: popoverBinding(for: feature.id),
-                         arrowEdge: .leading) {
+                         arrowEdge: .top) {
                     PlacePopover(
                         feature: feature,
                         document: level.document,
-                        canOpen: childExists(for: feature),
+                        canOpen: drillable,
                         onOpen: { drill(into: feature) }
                     )
                 }
@@ -341,10 +514,11 @@ private struct MapLevelView: View {
         if let mid = curvedApex(of: line.coordinates) {
             Annotation("", coordinate: mid, anchor: .center) {
                 TransitBadge(feature: feature,
+                             document: level.document,
                              isSelected: selection == feature.id,
                              detail: badgeDetail(forSpan: latitudeSpan))
                     .popover(isPresented: popoverBinding(for: feature.id),
-                             arrowEdge: .leading) {
+                             arrowEdge: .top) {
                         TransitPopover(feature: feature, document: level.document)
                     }
                     .onTapGesture { selection = feature.id }
@@ -404,10 +578,44 @@ private struct MapLevelView: View {
 }
 
 private struct PlaceMarker: View {
+    let kind: String?
+    let isDrillable: Bool
     let isSelected: Bool
     let days: [Int]
     let nights: Int
+    var detail: MarkerDetail = .full
     @State private var isHovering = false
+
+    private var size: CGFloat {
+        switch (detail, isDrillable) {
+        case (.full, true): return 42
+        case (.full, false): return 28
+        case (.small, true): return 28
+        case (.small, false): return 14
+        }
+    }
+
+    private var iconSize: CGFloat {
+        switch (detail, isDrillable) {
+        case (.full, true): return 18
+        case (.full, false): return 13
+        case (.small, true): return 13
+        case (.small, false): return 0
+        }
+    }
+
+    private var borderWidth: CGFloat {
+        switch (detail, isDrillable) {
+        case (.full, true): return 3
+        case (.full, false): return 2
+        case (.small, true): return 2
+        case (.small, false): return 1.5
+        }
+    }
+
+    private var showsIcon: Bool {
+        !(detail == .small && !isDrillable)
+    }
 
     private var scale: CGFloat {
         if isSelected { return 1.15 }
@@ -416,12 +624,20 @@ private struct PlaceMarker: View {
     }
 
     var body: some View {
-        Circle()
-            .fill(dayShape(days))
-            .frame(width: 22, height: 22)
-            .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
+        Group {
+            if showsIcon {
+                Image(systemName: iconForKind(kind))
+                    .font(.system(size: iconSize, weight: .heavy))
+                    .foregroundStyle(.white)
+            } else {
+                Color.clear
+            }
+        }
+            .frame(width: size, height: size)
+            .background(Circle().fill(dayShape(days)))
+            .overlay(Circle().strokeBorder(.white, lineWidth: borderWidth))
             .overlay(alignment: .topTrailing) {
-                if nights > 0 {
+                if nights > 0 && detail == .full {
                     NightBadge(count: nights)
                         .offset(x: 4, y: -4)
                 }
@@ -431,35 +647,7 @@ private struct PlaceMarker: View {
             .onHover { isHovering = $0 }
             .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isHovering)
             .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isSelected)
-    }
-}
-
-private struct ConnectionMarker: View {
-    let isSelected: Bool
-    let days: [Int]
-    @State private var isHovering = false
-
-    private var scale: CGFloat {
-        if isSelected { return 1.4 }
-        if isHovering { return 1.3 }
-        return 1.0
-    }
-
-    private var ringColor: Color {
-        if let day = days.first { return color(forDay: day) }
-        return .red
-    }
-
-    var body: some View {
-        Circle()
-            .fill(.white)
-            .frame(width: 14, height: 14)
-            .overlay(Circle().strokeBorder(ringColor, lineWidth: 3))
-            .shadow(radius: isHovering || isSelected ? 4 : 2, y: 1)
-            .scaleEffect(scale)
-            .onHover { isHovering = $0 }
-            .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isHovering)
-            .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isSelected)
+            .animation(.snappy, value: detail)
     }
 }
 
@@ -467,31 +655,29 @@ private struct NightBadge: View {
     let count: Int
 
     var body: some View {
-        ZStack {
+        HStack(spacing: 1) {
             Image(systemName: "moon.fill")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.indigo)
-                .frame(width: 16, height: 16)
-                .background(.white, in: Circle())
-                .overlay(Circle().strokeBorder(.indigo.opacity(0.4), lineWidth: 0.5))
-            if count > 1 {
-                Text("\(count)")
-                    .font(.system(size: 7, weight: .heavy))
-                    .foregroundStyle(.indigo)
-                    .offset(x: 0, y: 1)
-            }
+                .font(.system(size: 8, weight: .bold))
+            Text("\(count)")
+                .font(.system(size: 9, weight: .heavy))
+                .monospacedDigit()
         }
+        .foregroundStyle(.indigo)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(.white, in: Capsule())
+        .overlay(Capsule().strokeBorder(.indigo.opacity(0.4), lineWidth: 0.5))
     }
 }
 
 private struct PlaceLabel: View {
     let text: String
-    let isConnection: Bool
+    let isDrillable: Bool
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(isConnection ? .regular : .semibold))
-            .foregroundStyle(isConnection ? .secondary : .primary)
+            .font(.caption.weight(isDrillable ? .semibold : .regular))
+            .foregroundStyle(isDrillable ? .primary : .secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(.regularMaterial, in: Capsule())
@@ -499,60 +685,70 @@ private struct PlaceLabel: View {
     }
 }
 
-private struct DayChip: View {
-    let day: Int
-    let date: Date?
-    var arrivalTime: String? = nil
-    var departureTime: String? = nil
-
-    private var timeText: String? {
-        switch (arrivalTime, departureTime) {
-        case let (arr?, dep?): return "\(arr) → \(dep)"
-        case let (arr?, nil): return "↓ \(arr)"
-        case let (nil, dep?): return "↑ \(dep)"
-        default: return nil
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color(forDay: day))
-                .frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(date.map(formatDate) ?? "Day \(day)")
-                    .font(.caption.bold())
-                    .monospacedDigit()
-                if let timeText {
-                    Text(timeText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(color(forDay: day).opacity(0.14), in: Capsule())
-        .overlay(Capsule().strokeBorder(color(forDay: day).opacity(0.5), lineWidth: 0.5))
-    }
-}
-
-private struct DayChipRow: View {
+private struct DayTimeline: View {
     let days: [Int]
     let document: KMLDocument
-    var coordinate: CLLocationCoordinate2D? = nil
+    var startTime: String? = nil
+    var endTime: String? = nil
+
+    private var gradientColors: [Color] {
+        if days.isEmpty { return [.gray] }
+        if days.count == 1 {
+            let c = color(forDay: days[0])
+            return [c, c]
+        }
+        return days.map { color(forDay: $0) }
+    }
+
+    private var startDate: Date? {
+        days.first.flatMap { document.date(forDay: $0) }
+    }
+
+    private var endDate: Date? {
+        days.last.flatMap { document.date(forDay: $0) }
+    }
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(days, id: \.self) { day in
-                let times = coordinate.flatMap { document.times(at: $0, day: day) }
-                DayChip(
-                    day: day,
-                    date: document.date(forDay: day),
-                    arrivalTime: times?.arrival,
-                    departureTime: times?.departure
-                )
+        HStack(alignment: .bottom, spacing: 8) {
+            if startTime != nil || startDate != nil {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let startDate {
+                        Text(formatDate(startDate))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    if let startTime {
+                        Text(startTime)
+                            .font(.caption.bold())
+                            .monospacedDigit()
+                    }
+                }
+            }
+            Capsule()
+                .fill(LinearGradient(
+                    colors: gradientColors,
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ))
+                .frame(height: 10)
+                .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 0.5))
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 4)
+            if endTime != nil || endDate != nil {
+                VStack(alignment: .trailing, spacing: 2) {
+                    if let endDate {
+                        Text(formatDate(endDate))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    if let endTime {
+                        Text(endTime)
+                            .font(.caption.bold())
+                            .monospacedDigit()
+                    }
+                }
             }
         }
     }
@@ -560,8 +756,11 @@ private struct DayChipRow: View {
 
 private struct TransitBadge: View {
     let feature: KMLFeature
+    let document: KMLDocument
     let isSelected: Bool
     let detail: BadgeDetail
+
+    @State private var validation: TransitValidator.Result?
 
     var body: some View {
         Group {
@@ -578,45 +777,70 @@ private struct TransitBadge: View {
         .allowsHitTesting(detail != .hidden)
         .animation(.snappy, value: detail)
         .animation(.snappy, value: isSelected)
+        .task { await validate() }
     }
 
     private var iconOnlyBody: some View {
-        Text(vehicleIcon(feature.vehicle) ?? "•")
-            .font(.title3)
-            .padding(6)
-            .background(.regularMaterial, in: Circle())
-            .overlay(Circle().stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
-            .shadow(radius: 2, y: 1)
-            .scaleEffect(isSelected ? 1.1 : 1.0)
+        ZStack {
+            Circle()
+                .fill(.regularMaterial)
+                .overlay(Circle().stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
+                .shadow(radius: 2, y: 1)
+            Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
+        }
+        .frame(width: 24, height: 24)
+        .scaleEffect(isSelected ? 1.1 : 1.0)
     }
 
     private var fullBody: some View {
-        HStack(spacing: 6) {
-            if let icon = vehicleIcon(feature.vehicle) {
-                Text(icon).font(.title3)
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                if let name = feature.name {
-                    Text(name)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
+        ZStack {
+            Capsule()
+                .fill(.regularMaterial)
+                .overlay(Capsule().stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
+                .shadow(radius: 2, y: 1)
+            HStack(spacing: 6) {
+                if let icon = vehicleIcon(feature.vehicle) {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .overlay(alignment: .topTrailing) {
+                            if let dot = validationDotColor {
+                                Circle()
+                                    .fill(dot)
+                                    .frame(width: 7, height: 7)
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                                    .offset(x: 3, y: -3)
+                            }
+                        }
                 }
-                if let duration = feature.duration {
-                    Text(duration)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+                VStack(alignment: .leading, spacing: 0) {
+                    if let name = feature.name {
+                        Text(name)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    if let duration = feature.duration {
+                        Text(duration)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(
-            Capsule().stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5)
-        )
-        .shadow(radius: 2, y: 1)
         .scaleEffect(isSelected ? 1.05 : 1.0)
+    }
+
+    private var validationDotColor: Color? {
+        switch validation {
+        case .validated: return .green
+        case .notFound, .failed: return .yellow
+        case .none: return nil
+        }
     }
 
     private var strokeStyle: AnyShapeStyle {
@@ -628,6 +852,26 @@ private struct TransitBadge: View {
         }
         return AnyShapeStyle(.separator)
     }
+
+    private func validate() async {
+        guard let dep = feature.departure,
+              let day = feature.days.first,
+              let baseDate = document.date(forDay: day),
+              let start = feature.coordinates.first,
+              let end = feature.coordinates.last else { return }
+        let parts = dep.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2 else { return }
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: baseDate)
+        components.hour = parts[0]
+        components.minute = parts[1]
+        guard let fullDate = Calendar.current.date(from: components),
+              fullDate > Date() else { return }
+        let result = await TransitValidator.shared.validate(
+            from: start, to: end,
+            departureDate: fullDate,
+            vehicle: feature.vehicle)
+        await MainActor.run { validation = result }
+    }
 }
 
 private struct PlacePopover: View {
@@ -636,45 +880,64 @@ private struct PlacePopover: View {
     let canOpen: Bool
     let onOpen: () -> Void
 
-    private var displaysAsConnection: Bool { feature.isConnection || !canOpen }
+    @State private var resolvedBookingURL: URL?
+    @State private var imageRefreshTrigger = 0
+
+    private var bookableKinds: Set<String> {
+        ["hotel", "ryokan", "accommodation", "restaurant", "food", "dining"]
+    }
+
+    private var showsBookingButton: Bool {
+        guard let kind = feature.kind else { return false }
+        return bookableKinds.contains(kind)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HeroImage(explicitURL: feature.attributes["image_url"],
-                      wikipediaQuery: feature.name,
-                      vehicle: nil,
-                      days: feature.days,
-                      coordinate: feature.coordinates.first)
-                .frame(height: 160)
-                .clipped()
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                HeroImage(explicitURL: feature.attributes["image_url"],
+                          wikipediaQuery: feature.name,
+                          vehicle: nil,
+                          days: feature.days,
+                          coordinate: feature.coordinates.first,
+                          refreshTrigger: imageRefreshTrigger)
+                    .frame(height: 160)
+                    .clipped()
 
-            popoverBody
-                .padding(16)
+                popoverBody
+                    .padding(16)
+            }
+            ImageRefreshButton { imageRefreshTrigger += 1 }
+                .padding(8)
         }
         .frame(width: 320)
+        .task { await resolveBooking() }
+    }
+
+    private var arrivalTime: String? {
+        guard let coord = feature.coordinates.first, let firstDay = feature.days.first else { return nil }
+        return document.times(at: coord, day: firstDay)?.arrival
+    }
+
+    private var departureTime: String? {
+        guard let coord = feature.coordinates.first, let lastDay = feature.days.last else { return nil }
+        return document.times(at: coord, day: lastDay)?.departure
     }
 
     private var popoverBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
-                if displaysAsConnection {
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 22, height: 22)
-                        .overlay(Circle().strokeBorder(
-                            feature.days.first.map(color(forDay:)) ?? .red,
-                            lineWidth: 3))
-                } else {
-                    Circle()
-                        .fill(dayShape(feature.days))
-                        .frame(width: 26, height: 26)
-                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                }
+                Image(systemName: iconForKind(feature.kind))
+                    .font(.title3.weight(.heavy))
+                    .foregroundStyle(.white)
+                    .frame(width: 35, height: 35)
+                    .background(Circle().fill(dayShape(feature.days)))
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(feature.name ?? "Untitled")
                         .font(.title3.weight(.semibold))
-                    if displaysAsConnection {
-                        Text("Connection")
+                    if let kind = humanizedKind(feature.kind) {
+                        Text(kind)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -685,9 +948,10 @@ private struct PlacePopover: View {
                 }
             }
             if !feature.days.isEmpty {
-                DayChipRow(days: feature.days,
-                           document: document,
-                           coordinate: feature.coordinates.first)
+                DayTimeline(days: feature.days,
+                            document: document,
+                            startTime: arrivalTime,
+                            endTime: departureTime)
             }
             if canOpen, let name = feature.name {
                 Button(action: onOpen) {
@@ -696,7 +960,32 @@ private struct PlacePopover: View {
                 }
                 .controlSize(.regular)
             }
+            if showsBookingButton, let url = resolvedBookingURL {
+                Link(destination: url) {
+                    Label(bookingLabel, systemImage: "arrow.up.right.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+            }
         }
+    }
+
+    private var bookingLabel: String {
+        switch feature.kind?.lowercased() {
+        case "restaurant", "food", "dining": return "Reserve a table"
+        default: return "Book a stay"
+        }
+    }
+
+    private func resolveBooking() async {
+        guard showsBookingButton else { return }
+        var country: String?
+        if let coord = feature.coordinates.first {
+            country = await CountryResolver.shared.country(for: coord)
+        }
+        let url = bookingURL(for: feature, country: country)
+        await MainActor.run { resolvedBookingURL = url }
     }
 }
 
@@ -708,9 +997,7 @@ private struct NightBadgeLarge: View {
             Image(systemName: "moon.fill")
                 .font(.caption.bold())
                 .foregroundStyle(.indigo)
-            if count > 1 {
-                Text("× \(count)").font(.caption.bold())
-            }
+            Text("\(count)").font(.caption.bold())
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -718,61 +1005,189 @@ private struct NightBadgeLarge: View {
     }
 }
 
+private struct ImageRefreshButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.6))
+                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .help("Try a different image")
+    }
+}
+
+private struct DurationBadge: View {
+    let duration: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "clock")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Text(duration)
+                .font(.caption.bold())
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.gray.opacity(0.15), in: Capsule())
+    }
+}
+
 private struct TransitPopover: View {
     let feature: KMLFeature
     let document: KMLDocument
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HeroImage(explicitURL: feature.attributes["image_url"],
-                      wikipediaQuery: feature.name,
-                      vehicle: feature.vehicle,
-                      days: feature.days,
-                      coordinate: feature.coordinates.first)
-                .frame(height: 160)
-                .clipped()
+    @State private var resolvedBookingURL: URL?
+    @State private var imageRefreshTrigger = 0
+    @State private var validation: TransitValidator.Result?
 
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(feature.name ?? "Transit")
-                        .font(.title3.weight(.semibold))
-                    if let dep = feature.departure, let arr = feature.arrival {
-                        HStack(spacing: 6) {
-                            Text("\(dep) → \(arr)")
-                                .font(.callout)
-                                .monospacedDigit()
-                            if let duration = feature.duration {
-                                Text("·")
-                                    .foregroundStyle(.secondary)
-                                Text(duration)
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
+    private var showsBookingButton: Bool {
+        let v = feature.vehicle?.lowercased() ?? ""
+        return v != "walk" && v != "foot" && v != "bicycle" && v != "bike"
+    }
+
+    private var validatedArrival: String? {
+        if case .validated(let arr, _) = validation {
+            return Self.timeFormatter.string(from: arr)
+        }
+        return nil
+    }
+
+    private var validatedDuration: String? {
+        if case .validated(_, let dur) = validation {
+            return Self.formatDuration(seconds: Int(dur))
+        }
+        return nil
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private static func formatDuration(seconds: Int) -> String {
+        let mins = seconds / 60
+        let h = mins / 60
+        let m = mins % 60
+        if h == 0 { return "\(m)min" }
+        if m == 0 { return "\(h)h" }
+        return String(format: "%dh%02d", h, m)
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                HeroImage(explicitURL: feature.attributes["image_url"],
+                          wikipediaQuery: feature.name,
+                          vehicle: feature.vehicle,
+                          days: feature.days,
+                          coordinate: feature.coordinates.first,
+                          refreshTrigger: imageRefreshTrigger)
+                    .frame(height: 160)
+                    .clipped()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(feature.name ?? "Transit")
+                                .font(.title3.weight(.semibold))
+                            ValidationLabel(result: validation)
                         }
-                        .font(.callout)
-                    } else if let duration = feature.duration {
-                        Text(duration)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                        Spacer(minLength: 0)
+                        if let duration = validatedDuration ?? feature.duration {
+                            DurationBadge(duration: duration)
+                        }
+                    }
+                    if !feature.days.isEmpty {
+                        DayTimeline(days: feature.days,
+                                    document: document,
+                                    startTime: feature.departure,
+                                    endTime: validatedArrival ?? feature.arrival)
+                    }
+                    if showsBookingButton, let url = resolvedBookingURL {
+                        Link(destination: url) {
+                            Label("Book ticket", systemImage: "arrow.up.right.square")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.regular)
                     }
                 }
-                if !feature.days.isEmpty {
-                    DayChipRow(days: feature.days, document: document)
-                }
-                if let bookingURL = feature.attributes["booking_url"],
-                   let url = URL(string: bookingURL) {
-                    Link(destination: url) {
-                        Label("Book ticket", systemImage: "arrow.up.right.square")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-                }
+                .padding(16)
             }
-            .padding(16)
+            ImageRefreshButton { imageRefreshTrigger += 1 }
+                .padding(8)
         }
         .frame(width: 320)
+        .task { await resolveBooking() }
+        .task { await validate() }
+    }
+
+    private func resolveBooking() async {
+        guard showsBookingButton else { return }
+        var country: String?
+        if let coord = feature.coordinates.first {
+            country = await CountryResolver.shared.country(for: coord)
+        }
+        let url = bookingURL(for: feature, country: country)
+        await MainActor.run { resolvedBookingURL = url }
+    }
+
+    private func validate() async {
+        guard let dep = feature.departure,
+              let day = feature.days.first,
+              let baseDate = document.date(forDay: day),
+              let start = feature.coordinates.first,
+              let end = feature.coordinates.last else { return }
+        let parts = dep.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2 else { return }
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: baseDate)
+        components.hour = parts[0]
+        components.minute = parts[1]
+        guard let fullDate = Calendar.current.date(from: components),
+              fullDate > Date() else { return }
+        let result = await TransitValidator.shared.validate(
+            from: start, to: end,
+            departureDate: fullDate,
+            vehicle: feature.vehicle)
+        await MainActor.run { validation = result }
+    }
+}
+
+private struct ValidationLabel: View {
+    let result: TransitValidator.Result?
+
+    var body: some View {
+        switch result {
+        case .validated:
+            HStack(spacing: 4) {
+                Circle().fill(Color.green).frame(width: 6, height: 6)
+                Text("Verified")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .notFound, .failed:
+            HStack(spacing: 4) {
+                Circle().fill(Color.yellow).frame(width: 6, height: 6)
+                Text("Unverified")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .none:
+            EmptyView()
+        }
     }
 }
 
@@ -781,16 +1196,20 @@ private actor WikipediaImageResolver {
     private var memo: [String: [URL]] = [:]
 
     func imageURL(for query: String, context: String? = nil, attempt: Int = 0) async -> URL? {
-        let candidates = await candidates(for: query, context: context)
-        guard !candidates.isEmpty else { return nil }
-        return candidates[attempt % candidates.count]
+        let urls = await candidates(for: query, context: context)
+        guard !urls.isEmpty else { return nil }
+        return urls[attempt % urls.count]
+    }
+
+    func candidates(for query: String, context: String? = nil) async -> [URL] {
+        await fetchCandidates(for: query, context: context)
     }
 
     func clear(query: String, context: String? = nil) {
         memo.removeValue(forKey: memoKey(query: query, context: context))
     }
 
-    private func candidates(for query: String, context: String?) async -> [URL] {
+    private func fetchCandidates(for query: String, context: String?) async -> [URL] {
         let key = memoKey(query: query, context: context)
         if let cached = memo[key] { return cached }
         var urls: [URL] = []
@@ -865,6 +1284,58 @@ private actor WikipediaImageResolver {
     }
 }
 
+private actor TransitValidator {
+    static let shared = TransitValidator()
+
+    enum Result {
+        case validated(arrival: Date, expectedDuration: TimeInterval)
+        case notFound
+        case failed
+    }
+
+    private var cache: [String: Result] = [:]
+
+    func validate(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D,
+        departureDate: Date,
+        vehicle: String?
+    ) async -> Result {
+        let key = "\(start.latitude),\(start.longitude)|\(end.latitude),\(end.longitude)|\(Int(departureDate.timeIntervalSince1970))"
+        if let cached = cache[key] { return cached }
+
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
+        request.transportType = transportType(for: vehicle)
+        request.departureDate = departureDate
+
+        do {
+            let response = try await MKDirections(request: request).calculate()
+            guard let route = response.routes.first else {
+                cache[key] = .notFound
+                return .notFound
+            }
+            let arrival = departureDate.addingTimeInterval(route.expectedTravelTime)
+            let result = Result.validated(arrival: arrival, expectedDuration: route.expectedTravelTime)
+            cache[key] = result
+            return result
+        } catch {
+            cache[key] = .failed
+            return .failed
+        }
+    }
+
+    private func transportType(for vehicle: String?) -> MKDirectionsTransportType {
+        switch vehicle?.lowercased() {
+        case "car", "rental_car", "drive": return .automobile
+        case "walk", "foot": return .walking
+        case "bicycle", "bike": return .walking
+        default: return .transit
+        }
+    }
+}
+
 private actor CountryResolver {
     static let shared = CountryResolver()
     private var cache: [String: String?] = [:]
@@ -882,6 +1353,26 @@ private actor CountryResolver {
             cache[key] = nil
             return nil
         }
+    }
+}
+
+private enum ImageChoiceStore {
+    static func chosenURL(for key: String) -> URL? {
+        guard let s = UserDefaults.standard.string(forKey: defaultsKey(key)) else { return nil }
+        return URL(string: s)
+    }
+
+    static func setChosenURL(_ url: URL?, for key: String) {
+        let k = defaultsKey(key)
+        if let url {
+            UserDefaults.standard.set(url.absoluteString, forKey: k)
+        } else {
+            UserDefaults.standard.removeObject(forKey: k)
+        }
+    }
+
+    private static func defaultsKey(_ key: String) -> String {
+        "kokai.image.choice.\(key)"
     }
 }
 
@@ -924,57 +1415,55 @@ private struct HeroImage: View {
 
     @State private var image: NSImage?
     @State private var resolved = false
-    @State private var attempt = 0
 
-    private var baseKey: String {
+    private var cacheKey: String {
         if let explicitURL, !explicitURL.isEmpty { return "url:\(explicitURL)" }
         if let q = wikipediaQuery, !q.isEmpty { return "q:\(q)" }
         if let v = vehicle, !v.isEmpty { return "v:\(v)" }
         return "default"
     }
 
-    private var cacheKey: String { "\(baseKey)#\(attempt)" }
+    var refreshTrigger: Int = 0
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        GeometryReader { geo in
             ZStack {
                 fallback
                 if let image {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                }
-                if !resolved && image == nil {
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else if !resolved {
                     ProgressView()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-
-            Button(action: refresh) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.black)
-                    .frame(width: 26, height: 26)
-                    .background(Color.white.opacity(0.92), in: Circle())
-                    .overlay(Circle().stroke(Color.black.opacity(0.18), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
-            }
-            .buttonStyle(.plain)
-            .help("Try a different image")
-            .padding(8)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .task(id: cacheKey) {
-            await load()
-        }
+        .task(id: cacheKey) { await load() }
+        .onChange(of: refreshTrigger) { _, _ in refresh() }
     }
 
     private func refresh() {
-        image = nil
-        resolved = false
-        attempt += 1
+        let key = cacheKey
+        let q = wikipediaQuery
+        let v = vehicle
+        let coord = coordinate
         Task {
-            await DiskImageCache.shared.clear(key: cacheKey)
+            let context = await searchContext(coord: coord, vehicle: v)
+            let urls = await allCandidates(query: q, vehicle: v, context: context)
+            guard !urls.isEmpty else { return }
+            let current = ImageChoiceStore.chosenURL(for: key)
+            let currentIndex = current.flatMap { urls.firstIndex(of: $0) } ?? -1
+            let next = urls[(currentIndex + 1) % urls.count]
+            ImageChoiceStore.setChosenURL(next, for: key)
+            await DiskImageCache.shared.clear(key: key)
+            await MainActor.run {
+                image = nil
+                resolved = false
+            }
+            await download(url: next, key: key)
         }
     }
 
@@ -988,60 +1477,85 @@ private struct HeroImage: View {
             }
             return
         }
-        guard let url = await resolveURL() else {
+        if let url = ImageChoiceStore.chosenURL(for: key) {
+            await download(url: url, key: key)
+            return
+        }
+        guard let url = await firstURL() else {
             await MainActor.run { resolved = true }
             return
         }
+        ImageChoiceStore.setChosenURL(url, for: key)
+        await download(url: url, key: key)
+    }
+
+    private func download(url: URL, key: String) async {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             await DiskImageCache.shared.write(data, for: key)
-            if let downloaded = NSImage(data: data) {
+            if let img = NSImage(data: data) {
                 await MainActor.run {
-                    image = downloaded
+                    image = img
                     resolved = true
                 }
                 return
             }
         } catch {
-            // network failure — fall through to fallback
+            // network failure
         }
         await MainActor.run { resolved = true }
     }
 
-    private func resolveURL() async -> URL? {
+    private func firstURL() async -> URL? {
         if let explicitURL, !explicitURL.isEmpty, let url = URL(string: explicitURL) {
             return url
         }
-        var contextParts: [String] = []
-        if let v = vehicleWikipediaQuery(vehicle)?.lowercased() {
-            contextParts.append(v)
-        }
-        if let coord = coordinate,
-           let country = await CountryResolver.shared.country(for: coord) {
-            contextParts.append(country)
-        }
-        let context = contextParts.isEmpty ? nil : contextParts.joined(separator: " ")
-
+        let context = await searchContext(coord: coordinate, vehicle: vehicle)
         if let q = wikipediaQuery, !q.isEmpty,
-           let url = await WikipediaImageResolver.shared.imageURL(
-               for: q, context: context, attempt: attempt) {
+           let url = await WikipediaImageResolver.shared.imageURL(for: q, context: context) {
             return url
         }
         if let vQuery = vehicleWikipediaQuery(vehicle),
-           let url = await WikipediaImageResolver.shared.imageURL(
-               for: vQuery, attempt: attempt) {
+           let url = await WikipediaImageResolver.shared.imageURL(for: vQuery) {
             return url
         }
         return nil
+    }
+
+    private func allCandidates(query: String?, vehicle: String?, context: String?) async -> [URL] {
+        if let explicitURL, !explicitURL.isEmpty, let url = URL(string: explicitURL) {
+            return [url]
+        }
+        var urls: [URL] = []
+        if let q = query, !q.isEmpty {
+            urls.append(contentsOf: await WikipediaImageResolver.shared.candidates(for: q, context: context))
+        }
+        if let vQuery = vehicleWikipediaQuery(vehicle) {
+            for url in await WikipediaImageResolver.shared.candidates(for: vQuery) {
+                if !urls.contains(url) { urls.append(url) }
+            }
+        }
+        return urls
+    }
+
+    private func searchContext(coord: CLLocationCoordinate2D?, vehicle: String?) async -> String? {
+        var parts: [String] = []
+        if let v = vehicleWikipediaQuery(vehicle)?.lowercased() {
+            parts.append(v)
+        }
+        if let coord, let country = await CountryResolver.shared.country(for: coord) {
+            parts.append(country)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     private var fallback: some View {
         ZStack {
             Rectangle().fill(dayShapeHorizontal(days.isEmpty ? [1] : days))
             if let icon = vehicleIcon(vehicle) {
-                Text(icon)
-                    .font(.system(size: 80))
-                    .shadow(radius: 4)
+                Image(systemName: icon)
+                    .font(.system(size: 64, weight: .semibold))
+                    .foregroundStyle(.white)
             }
         }
     }
