@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Osaka</name>
+    <Placemark>
+      <name>Osaka Castle</name>
+      <Point><coordinates>135.5258,34.6873,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Dotonbori</name>
+      <Point><coordinates>135.5012,34.6687,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Umeda Sky Building</name>
+      <Point><coordinates>135.4900,34.7053,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Universal Studios Japan</name>
+      <Point><coordinates>135.4323,34.6657,0</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>

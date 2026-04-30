@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Oboke</name>
+    <ExtendedData>
+      <Data name="start_date"><value>2026-06-15</value></Data>
+    </ExtendedData>
+
+    <Placemark>
+      <name>Tadotsu Station</name>
+      <ExtendedData><Data name="days"><value>6</value></Data></ExtendedData>
+      <Point><coordinates>133.7560,34.2730,0</coordinates></Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Oboke Gorge</name>
+      <ExtendedData><Data name="days"><value>6</value></Data></ExtendedData>
+      <Point><coordinates>133.7900,33.8830,0</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
