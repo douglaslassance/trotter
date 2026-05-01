@@ -13,7 +13,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "cafe", "coffee": return "mug.fill"
     case "bar", "pub", "izakaya": return "wineglass"
     case "bookstore", "books": return "books.vertical.fill"
-    case "record", "records", "music": return "music.note"
+    case "record", "records", "music": return "opticaldisc.fill"
     case "craft", "crafts", "artisan": return "hammer.fill"
     case "park", "natural_park", "nature": return "leaf.fill"
     case "viewpoint", "lookout": return "eye.fill"
@@ -343,6 +343,7 @@ struct ContentView: View {
                 BreadcrumbBar(nav: nav)
                 if let level = nav.current {
                     TripInfoBar(document: level.document)
+                    DayLegend(document: level.document)
                 }
             }
             .padding(12)
@@ -405,6 +406,43 @@ private struct TripInfoBar: View {
         .background(.regularMaterial, in: Capsule())
         .overlay(Capsule().stroke(AnyShapeStyle(.separator), lineWidth: 0.5))
         .shadow(radius: 4, y: 2)
+    }
+}
+
+private struct DayLegend: View {
+    let document: KMLDocument
+
+    private var days: [Int] {
+        let unique = Set(document.features.flatMap(\.days))
+        return unique.sorted()
+    }
+
+    var body: some View {
+        if !days.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(days, id: \.self) { day in
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(color(forDay: day))
+                            .frame(width: 10, height: 10)
+                        if let date = document.date(forDay: day) {
+                            Text(formatDate(date))
+                                .font(.caption.bold())
+                                .monospacedDigit()
+                        } else {
+                            Text("Day \(day)")
+                                .font(.caption.bold())
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10)
+                .stroke(AnyShapeStyle(.separator), lineWidth: 0.5))
+            .shadow(radius: 4, y: 2)
+        }
     }
 }
 
