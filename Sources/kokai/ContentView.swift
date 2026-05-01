@@ -931,8 +931,9 @@ private struct PlaceMarker: View {
 
 private struct BadWeatherBadge: View {
     var body: some View {
-        Image(systemName: "exclamationmark.triangle.fill")
-            .font(.system(size: 9, weight: .heavy))
+        Image(systemName: "cloud.bolt.rain.fill")
+            .font(.system(size: 10, weight: .heavy))
+            .symbolRenderingMode(.monochrome)
             .foregroundStyle(.white)
             .padding(4)
             .background(Circle().fill(Color.orange))
