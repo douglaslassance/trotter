@@ -1834,8 +1834,8 @@ private func isBadWeather(code: Int) -> Bool {
 
 private func weatherIcon(for code: Int) -> String {
     switch code {
-    case 0: return "sun.max.fill"
-    case 1, 2: return "cloud.sun.fill"
+    case 0, 1: return "sun.max.fill"
+    case 2: return "cloud.sun.fill"
     case 3: return "cloud.fill"
     case 45, 48: return "cloud.fog.fill"
     case 51, 53, 55, 56, 57: return "cloud.drizzle.fill"
