@@ -21,6 +21,13 @@ struct KMLDocument {
         return f.date(from: s)
     }
 
+    var showsWeather: Bool {
+        switch attributes["show_weather"]?.lowercased() {
+        case "true", "1", "yes": return true
+        default: return false
+        }
+    }
+
     func date(forDay day: Int) -> Date? {
         guard let start = startDate else { return nil }
         return Calendar.current.date(byAdding: .day, value: day - 1, to: start)

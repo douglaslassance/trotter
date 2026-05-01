@@ -916,7 +916,7 @@ private struct PlaceMarker: View {
     }
 
     private func checkWeather() async {
-        guard let coordinate, let document, !days.isEmpty else { return }
+        guard let coordinate, let document, document.showsWeather, !days.isEmpty else { return }
         for day in days {
             guard let date = document.date(forDay: day) else { continue }
             if let summary = await WeatherResolver.shared.summary(for: coordinate, date: date),
@@ -1373,7 +1373,7 @@ private struct PlacePopover: View {
     }
 
     private func resolveWeather() async {
-        guard let coord = feature.coordinates.first else { return }
+        guard document.showsWeather, let coord = feature.coordinates.first else { return }
         var results: [Int: WeatherSummary] = [:]
         for day in feature.days {
             guard let date = document.date(forDay: day) else { continue }
