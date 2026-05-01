@@ -617,7 +617,9 @@ private struct MapLevelView: View {
                                 isSelected: selection == feature.id,
                                 days: feature.days,
                                 nights: feature.nights,
-                                detail: detail)
+                                detail: detail,
+                                coordinate: point.coordinate,
+                                document: level.document)
                     if detail == .full, let name = point.name, !name.isEmpty {
                         PlaceLabel(text: name, isDrillable: prominent)
                             .fixedSize()
@@ -828,7 +830,10 @@ private struct PlaceMarker: View {
     let days: [Int]
     let nights: Int
     var detail: MarkerDetail = .full
+    var coordinate: CLLocationCoordinate2D? = nil
+    var document: KMLDocument? = nil
     @State private var isHovering = false
+    @State private var hasBadWeather = false
 
     private var displaysLarge: Bool { nights > 0 }
 
@@ -890,12 +895,50 @@ private struct PlaceMarker: View {
                         .offset(x: 4, y: -4)
                 }
             }
+            .overlay(alignment: .topLeading) {
+                if hasBadWeather && detail == .full {
+                    BadWeatherBadge()
+                        .offset(x: -4, y: -4)
+                }
+            }
             .shadow(radius: isHovering || isSelected ? 5 : 3, y: 1)
             .scaleEffect(scale)
             .onHover { isHovering = $0 }
             .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isHovering)
             .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isSelected)
             .animation(.snappy, value: detail)
+            .task(id: weatherKey) { await checkWeather() }
+    }
+
+    private var weatherKey: String {
+        guard let coordinate else { return "" }
+        return "\(coordinate.latitude),\(coordinate.longitude)|\(days.map(String.init).joined(separator: ","))"
+    }
+
+    private func checkWeather() async {
+        guard let coordinate, let document, !days.isEmpty else { return }
+        for day in days {
+            guard let date = document.date(forDay: day) else { continue }
+            if let summary = await WeatherResolver.shared.summary(for: coordinate, date: date),
+               isBadWeather(code: summary.code) {
+                await MainActor.run { hasBadWeather = true }
+                return
+            }
+        }
+        await MainActor.run { hasBadWeather = false }
+    }
+}
+
+private struct BadWeatherBadge: View {
+    var body: some View {
+        Image(systemName: "exclamationmark.triangle.fill")
+            .font(.system(size: 9, weight: .heavy))
+            .foregroundStyle(.white)
+            .padding(4)
+            .background(Circle().fill(Color.orange))
+            .overlay(Circle().strokeBorder(.white, lineWidth: 1))
+            .shadow(radius: 1, y: 0.5)
+            .help("Bad weather expected")
     }
 }
 
@@ -1738,6 +1781,13 @@ private func weatherTooltip(for summary: WeatherSummary) -> String {
     let low = Int(summary.lowC.rounded())
     let prefix = summary.isHistorical ? "Typical (last year)" : "Forecast"
     return "\(prefix): \(high)° / \(low)°"
+}
+
+private func isBadWeather(code: Int) -> Bool {
+    switch code {
+    case 65, 67, 82, 71, 73, 75, 77, 85, 86, 95, 96, 99: return true
+    default: return false
+    }
 }
 
 private func weatherIcon(for code: Int) -> String {
