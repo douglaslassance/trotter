@@ -1030,33 +1030,35 @@ private struct DayTimeline: View {
                     }
                 }
             }
-            VStack(spacing: 2) {
-                if !weatherByDay.isEmpty {
+            Capsule()
+                .fill(LinearGradient(
+                    colors: gradientColors,
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ))
+                .frame(height: 14)
+                .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 0.5))
+                .overlay(
                     HStack(spacing: 0) {
                         ForEach(days, id: \.self) { day in
-                            if let summary = weatherByDay[day] {
-                                Image(systemName: weatherIcon(for: summary.code))
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
-                                    .frame(maxWidth: .infinity)
-                                    .help(weatherTooltip(for: summary))
-                            } else {
-                                Color.clear.frame(maxWidth: .infinity)
+                            ZStack {
+                                if let summary = weatherByDay[day] {
+                                    Circle()
+                                        .fill(.white)
+                                        .frame(width: 18, height: 18)
+                                        .overlay(Circle().stroke(.separator, lineWidth: 0.5))
+                                    Image(systemName: weatherIcon(for: summary.code))
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+                                        .help(weatherTooltip(for: summary))
+                                }
                             }
+                            .frame(maxWidth: .infinity)
                         }
                     }
-                }
-                Capsule()
-                    .fill(LinearGradient(
-                        colors: gradientColors,
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ))
-                    .frame(height: 10)
-                    .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 0.5))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 4)
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 4)
             if endTime != nil || endDate != nil {
                 VStack(alignment: .trailing, spacing: 2) {
                     if let endDate {
