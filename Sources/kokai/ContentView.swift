@@ -15,6 +15,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "bookstore", "books": return "books.vertical.fill"
     case "record", "records", "music": return "opticaldisc.fill"
     case "craft", "crafts", "artisan": return "hammer.fill"
+    case "architecture", "building": return "building.2.crop.circle.fill"
     case "park", "natural_park", "nature": return "leaf.fill"
     case "viewpoint", "lookout": return "eye.fill"
     case "temple": return "building.columns.fill"
