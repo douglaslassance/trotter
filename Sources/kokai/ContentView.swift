@@ -451,6 +451,7 @@ private struct DayLegend: View {
                         if let summary = weatherByDay[day] {
                             Image(systemName: weatherIcon(for: summary.code))
                                 .font(.system(size: 11, weight: .semibold))
+                                .symbolRenderingMode(.monochrome)
                                 .foregroundStyle(color(forDay: day))
                                 .frame(width: 14)
                                 .help(weatherTooltip(for: summary))
