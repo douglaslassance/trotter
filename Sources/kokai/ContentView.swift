@@ -1045,8 +1045,9 @@ private struct DayTimeline: View {
                                 if let summary = weatherByDay[day] {
                                     Circle()
                                         .fill(.white)
-                                        .frame(width: 18, height: 18)
+                                        .frame(width: 20, height: 20)
                                         .overlay(Circle().stroke(.separator, lineWidth: 0.5))
+                                        .shadow(radius: 1.5, y: 0.5)
                                     Image(systemName: weatherIcon(for: summary.code))
                                         .font(.system(size: 10, weight: .semibold))
                                         .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
