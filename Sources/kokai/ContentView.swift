@@ -475,21 +475,11 @@ private struct EmptyState: View {
 private struct BreadcrumbBar: View {
     @Bindable var nav: NavigationModel
 
-    private var parentTitle: String? {
-        guard nav.stack.count >= 2 else { return nil }
-        return nav.stack[nav.stack.count - 2].title
-    }
-
     var body: some View {
         if !nav.stack.isEmpty {
             HStack(spacing: 6) {
                 Button { nav.goBack() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                        if let parentTitle {
-                            Text(parentTitle)
-                        }
-                    }
+                    Image(systemName: "chevron.left")
                 }
                 .disabled(!nav.canGoBack)
                 .buttonStyle(.borderless)
