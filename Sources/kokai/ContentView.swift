@@ -1142,6 +1142,7 @@ private struct PlacePopover: View {
 
     @State private var resolvedBookingURL: URL?
     @State private var imageRefreshTrigger = 0
+    @State private var weather: WeatherSummary?
 
     private var bookableKinds: Set<String> {
         ["hotel", "ryokan", "accommodation",
@@ -1177,6 +1178,7 @@ private struct PlacePopover: View {
         }
         .frame(width: 320)
         .task { await resolveBooking() }
+        .task { await resolveWeather() }
     }
 
     private var arrivalTime: String? {
@@ -1233,6 +1235,9 @@ private struct PlacePopover: View {
                     }
                 }
                 Spacer(minLength: 0)
+                if let weather {
+                    WeatherBadge(summary: weather)
+                }
                 if let stayDuration {
                     DurationBadge(duration: stayDuration)
                 }
@@ -1294,6 +1299,14 @@ private struct PlacePopover: View {
         }
         let url = bookingURL(for: feature, country: country)
         await MainActor.run { resolvedBookingURL = url }
+    }
+
+    private func resolveWeather() async {
+        guard let coord = feature.coordinates.first,
+              let day = feature.days.first,
+              let date = document.date(forDay: day) else { return }
+        let summary = await WeatherResolver.shared.summary(for: coord, date: date)
+        await MainActor.run { weather = summary }
     }
 }
 
@@ -1679,6 +1692,116 @@ private actor CountryResolver {
             cache[key] = nil
             return nil
         }
+    }
+}
+
+struct WeatherSummary: Equatable {
+    let highC: Double
+    let lowC: Double
+    let code: Int
+    let isHistorical: Bool
+}
+
+private func weatherIcon(for code: Int) -> String {
+    switch code {
+    case 0: return "sun.max.fill"
+    case 1, 2: return "cloud.sun.fill"
+    case 3: return "cloud.fill"
+    case 45, 48: return "cloud.fog.fill"
+    case 51, 53, 55, 56, 57: return "cloud.drizzle.fill"
+    case 61, 63, 65, 66, 67: return "cloud.rain.fill"
+    case 71, 73, 75, 77, 85, 86: return "cloud.snow.fill"
+    case 80, 81, 82: return "cloud.heavyrain.fill"
+    case 95, 96, 99: return "cloud.bolt.rain.fill"
+    default: return "thermometer.medium"
+    }
+}
+
+private actor WeatherResolver {
+    static let shared = WeatherResolver()
+    private var cache: [String: WeatherSummary] = [:]
+
+    func summary(for coord: CLLocationCoordinate2D, date: Date) async -> WeatherSummary? {
+        let cal = Calendar(identifier: .gregorian)
+        let startOfDay = cal.startOfDay(for: date)
+        let key = String(format: "%.2f,%.2f|%@", coord.latitude, coord.longitude,
+                         Self.dateFormatter.string(from: startOfDay))
+        if let hit = cache[key] { return hit }
+
+        let today = cal.startOfDay(for: Date())
+        let daysFromNow = cal.dateComponents([.day], from: today, to: startOfDay).day ?? 0
+
+        let summary: WeatherSummary?
+        if daysFromNow >= 0 && daysFromNow <= 15 {
+            summary = await fetchForecast(coord: coord, date: startOfDay)
+        } else {
+            summary = await fetchHistorical(coord: coord, date: startOfDay)
+        }
+        if let summary { cache[key] = summary }
+        return summary
+    }
+
+    private func fetchForecast(coord: CLLocationCoordinate2D, date: Date) async -> WeatherSummary? {
+        let day = Self.dateFormatter.string(from: date)
+        let url = "https://api.open-meteo.com/v1/forecast?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,weathercode&start_date=\(day)&end_date=\(day)&timezone=auto"
+        return await fetch(urlString: url, isHistorical: false)
+    }
+
+    private func fetchHistorical(coord: CLLocationCoordinate2D, date: Date) async -> WeatherSummary? {
+        // Use the same date one year earlier from the archive as a representative sample.
+        let cal = Calendar(identifier: .gregorian)
+        guard let priorYear = cal.date(byAdding: .year, value: -1, to: date) else { return nil }
+        // The archive is published with a few days delay; clamp to 5 days ago at most.
+        let cutoff = cal.date(byAdding: .day, value: -5, to: cal.startOfDay(for: Date())) ?? Date()
+        let target = priorYear < cutoff ? priorYear : cutoff
+        let day = Self.dateFormatter.string(from: target)
+        let url = "https://archive-api.open-meteo.com/v1/archive?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,weathercode&start_date=\(day)&end_date=\(day)&timezone=auto"
+        return await fetch(urlString: url, isHistorical: true)
+    }
+
+    private func fetch(urlString: String, isHistorical: Bool) async -> WeatherSummary? {
+        guard let url = URL(string: urlString) else { return nil }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let daily = json["daily"] as? [String: Any],
+                  let highs = daily["temperature_2m_max"] as? [Double],
+                  let lows = daily["temperature_2m_min"] as? [Double],
+                  let codes = daily["weathercode"] as? [Int],
+                  let high = highs.first, let low = lows.first, let code = codes.first
+            else { return nil }
+            return WeatherSummary(highC: high, lowC: low, code: code, isHistorical: isHistorical)
+        } catch {
+            return nil
+        }
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
+}
+
+private struct WeatherBadge: View {
+    let summary: WeatherSummary
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: weatherIcon(for: summary.code))
+                .font(.caption.bold())
+                .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+            Text("\(Int(summary.highC.rounded()))° / \(Int(summary.lowC.rounded()))°")
+                .font(.caption.bold())
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().stroke(AnyShapeStyle(.separator), lineWidth: 0.5))
+        .help(summary.isHistorical ? "Typical for the date (last year)" : "Forecast")
     }
 }
 
