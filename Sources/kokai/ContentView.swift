@@ -10,6 +10,11 @@ private func iconForKind(_ kind: String?) -> String {
     case "town": return "house.fill"
     case "village": return "house"
     case "restaurant", "food", "dining": return "fork.knife"
+    case "cafe", "coffee": return "cup.and.saucer.fill"
+    case "bar", "pub", "izakaya": return "wineglass"
+    case "bookstore", "books": return "books.vertical.fill"
+    case "record", "records", "music": return "music.note"
+    case "craft", "crafts", "artisan": return "hammer.fill"
     case "park", "natural_park", "nature": return "leaf.fill"
     case "viewpoint", "lookout": return "eye.fill"
     case "temple": return "building.columns.fill"
@@ -26,7 +31,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "castle": return "shield.fill"
     case "connection", "transfer": return "arrow.triangle.swap"
     case "airport": return "airplane"
-    case "station": return "tram.fill"
+    case "station": return "building.fill"
     case "port", "harbor": return "ferry.fill"
     default: return "mappin"
     }
@@ -58,6 +63,29 @@ private func vehicleIcon(_ vehicle: String?) -> String? {
     case "plane", "flight": return "airplane"
     default: return "mappin"
     }
+}
+
+private func youtubeSearchURL(for feature: KMLFeature) -> URL? {
+    guard let name = feature.name, !name.isEmpty else { return nil }
+    var components = URLComponents(string: "https://www.youtube.com/results")
+    components?.queryItems = [URLQueryItem(name: "search_query", value: name)]
+    return components?.url
+}
+
+private func googleMapsURL(coord: CLLocationCoordinate2D, name: String?) -> URL? {
+    var components = URLComponents(string: "https://www.google.com/maps/search/")
+    let q: String
+    if let name, !name.isEmpty {
+        q = "\(name)"
+    } else {
+        q = "\(coord.latitude),\(coord.longitude)"
+    }
+    components?.queryItems = [
+        URLQueryItem(name: "api", value: "1"),
+        URLQueryItem(name: "query", value: q),
+        URLQueryItem(name: "ll", value: "\(coord.latitude),\(coord.longitude)"),
+    ]
+    return components?.url
 }
 
 private func bookingURL(for feature: KMLFeature, country: String?) -> URL? {
@@ -146,6 +174,14 @@ private let dayPalette: [Color] = [
     Color(red: 0.18, green: 0.42, blue: 0.43), // Day 14 — petrol
     Color(red: 0.11, green: 0.30, blue: 0.48), // Day 15 — navy
     Color(red: 0.36, green: 0.23, blue: 0.49), // Day 16 — deep violet
+    Color(red: 0.55, green: 0.20, blue: 0.35), // Day 17 — wine
+    Color(red: 0.30, green: 0.45, blue: 0.30), // Day 18 — fern
+    Color(red: 0.50, green: 0.35, blue: 0.55), // Day 19 — orchid
+    Color(red: 0.18, green: 0.45, blue: 0.55), // Day 20 — deep cyan
+    Color(red: 0.55, green: 0.40, blue: 0.30), // Day 21 — sienna
+    Color(red: 0.30, green: 0.55, blue: 0.45), // Day 22 — sea green
+    Color(red: 0.50, green: 0.35, blue: 0.30), // Day 23 — chestnut
+    Color(red: 0.40, green: 0.50, blue: 0.65), // Day 24 — slate blue
 ]
 
 private func color(forDay day: Int) -> Color {
@@ -155,7 +191,7 @@ private func color(forDay day: Int) -> Color {
 
 private func dayShape(_ days: [Int]) -> AnyShapeStyle {
     if days.isEmpty {
-        return AnyShapeStyle(Color.red)
+        return AnyShapeStyle(Color.gray)
     }
     if days.count == 1 {
         return AnyShapeStyle(color(forDay: days[0]))
@@ -169,7 +205,7 @@ private func dayShape(_ days: [Int]) -> AnyShapeStyle {
 
 private func dayShapeHorizontal(_ days: [Int]) -> AnyShapeStyle {
     if days.isEmpty {
-        return AnyShapeStyle(Color.red)
+        return AnyShapeStyle(Color.gray)
     }
     if days.count == 1 {
         return AnyShapeStyle(color(forDay: days[0]))
@@ -261,6 +297,18 @@ private func bezierApex(from start: CLLocationCoordinate2D,
     return CLLocationCoordinate2D(
         latitude: 0.25 * start.latitude + 0.5 * control.latitude + 0.25 * end.latitude,
         longitude: 0.25 * start.longitude + 0.5 * control.longitude + 0.25 * end.longitude
+    )
+}
+
+private func bezierPoint(at t: Double,
+                         from start: CLLocationCoordinate2D,
+                         to end: CLLocationCoordinate2D,
+                         perpOffset: Double) -> CLLocationCoordinate2D {
+    let control = bezierMid(from: start, to: end, perpOffset: perpOffset)
+    let u = 1 - t
+    return CLLocationCoordinate2D(
+        latitude: u * u * start.latitude + 2 * u * t * control.latitude + t * t * end.latitude,
+        longitude: u * u * start.longitude + 2 * u * t * control.longitude + t * t * end.longitude
     )
 }
 
@@ -459,15 +507,17 @@ private struct MapLevelView: View {
         switch feature {
         case .point(let point):
             let drillable = childExists(for: feature)
+            let prominent = drillable || feature.nights > 0
             let detail = markerDetail(forSpan: latitudeSpan)
             let markerSize: CGFloat = {
-                switch (detail, drillable) {
+                switch (detail, prominent) {
                 case (.full, true): return 42
                 case (.full, false): return 28
                 case (.small, true): return 28
                 case (.small, false): return 14
                 }
             }()
+            let isPOI = feature.days.isEmpty
             Annotation("", coordinate: point.coordinate, anchor: .center) {
                 ZStack {
                     PlaceMarker(kind: feature.kind,
@@ -477,12 +527,13 @@ private struct MapLevelView: View {
                                 nights: feature.nights,
                                 detail: detail)
                     if detail == .full, let name = point.name, !name.isEmpty {
-                        PlaceLabel(text: name, isDrillable: drillable)
+                        PlaceLabel(text: name, isDrillable: prominent)
                             .fixedSize()
-                            .offset(y: drillable ? 34 : 21)
+                            .offset(y: prominent ? 34 : 21)
                             .allowsHitTesting(false)
                     }
                 }
+                .opacity(isPOI ? 0.55 : 1)
                 .frame(width: markerSize, height: markerSize)
                 .popover(isPresented: popoverBinding(for: feature.id),
                          arrowEdge: .top) {
@@ -495,6 +546,23 @@ private struct MapLevelView: View {
                 }
             }
             .tag(feature.id)
+
+            if detail == .full {
+                ForEach(arrivalBadges(for: feature), id: \.day) { badge in
+                    Annotation("", coordinate: badge.coord, anchor: .center) {
+                        EntryExitBadge(time: badge.time)
+                            .fixedSize()
+                            .allowsHitTesting(false)
+                    }
+                }
+                ForEach(departureBadges(for: feature), id: \.day) { badge in
+                    Annotation("", coordinate: badge.coord, anchor: .center) {
+                        EntryExitBadge(time: badge.time)
+                            .fixedSize()
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
 
         case .lineString(let line):
             transitContent(feature: feature, line: line)
@@ -535,6 +603,90 @@ private struct MapLevelView: View {
                 else if selection == id { selection = nil }
             }
         )
+    }
+
+    private struct DayBadge {
+        let day: Int
+        let time: String
+        let coord: CLLocationCoordinate2D
+    }
+
+    private func arrivalBadges(for feature: KMLFeature) -> [DayBadge] {
+        guard let placeCoord = feature.coordinates.first else { return [] }
+        var results: [DayBadge] = []
+        for day in feature.days {
+            guard let inbound = level.document.inboundTransit(at: placeCoord, day: day),
+                  case .lineString(let line) = inbound,
+                  line.coordinates.count >= 2,
+                  let arrival = inbound.arrival else { continue }
+            let from = line.coordinates[line.coordinates.count - 2]
+            let to = line.coordinates[line.coordinates.count - 1]
+            let coord = bezierPoint(at: 0.85,
+                                    from: from, to: to,
+                                    perpOffset: curveOffset(from: from, to: to))
+            results.append(DayBadge(day: day, time: arrival, coord: coord))
+        }
+        return results
+    }
+
+    private func departureBadges(for feature: KMLFeature) -> [DayBadge] {
+        guard let placeCoord = feature.coordinates.first else { return [] }
+        var results: [DayBadge] = []
+        for day in feature.days {
+            guard let outbound = level.document.outboundTransit(at: placeCoord, day: day),
+                  case .lineString(let line) = outbound,
+                  line.coordinates.count >= 2,
+                  let departure = outbound.departure else { continue }
+            let from = line.coordinates[0]
+            let to = line.coordinates[1]
+            let coord = bezierPoint(at: 0.15,
+                                    from: from, to: to,
+                                    perpOffset: curveOffset(from: from, to: to))
+            results.append(DayBadge(day: day, time: departure, coord: coord))
+        }
+        return results
+    }
+
+    private func entryBadgeCoord(for feature: KMLFeature) -> CLLocationCoordinate2D? {
+        guard let coord = feature.coordinates.first,
+              let firstDay = feature.days.first,
+              let inbound = level.document.inboundTransit(at: coord, day: firstDay),
+              case .lineString(let line) = inbound,
+              line.coordinates.count >= 2 else { return nil }
+        let from = line.coordinates[line.coordinates.count - 2]
+        let to = line.coordinates[line.coordinates.count - 1]
+        return bezierPoint(at: 0.85,
+                           from: from, to: to,
+                           perpOffset: curveOffset(from: from, to: to))
+    }
+
+    private func exitBadgeCoord(for feature: KMLFeature) -> CLLocationCoordinate2D? {
+        guard let coord = feature.coordinates.first,
+              let lastDay = feature.days.last,
+              let outbound = level.document.outboundTransit(at: coord, day: lastDay),
+              case .lineString(let line) = outbound,
+              line.coordinates.count >= 2 else { return nil }
+        let from = line.coordinates[0]
+        let to = line.coordinates[1]
+        return bezierPoint(at: 0.15,
+                           from: from, to: to,
+                           perpOffset: curveOffset(from: from, to: to))
+    }
+
+    private func arrivalInfo(for feature: KMLFeature) -> (date: Date, time: String)? {
+        guard let coord = feature.coordinates.first,
+              let firstDay = feature.days.first,
+              let arrival = level.document.times(at: coord, day: firstDay)?.arrival,
+              let date = level.document.date(forDay: firstDay) else { return nil }
+        return (date, arrival)
+    }
+
+    private func departureInfo(for feature: KMLFeature) -> (date: Date, time: String)? {
+        guard let coord = feature.coordinates.first,
+              let lastDay = feature.days.last,
+              let departure = level.document.times(at: coord, day: lastDay)?.departure,
+              let date = level.document.date(forDay: lastDay) else { return nil }
+        return (date, departure)
     }
 
     private func childExists(for feature: KMLFeature) -> Bool {
@@ -586,8 +738,10 @@ private struct PlaceMarker: View {
     var detail: MarkerDetail = .full
     @State private var isHovering = false
 
+    private var displaysLarge: Bool { isDrillable || nights > 0 }
+
     private var size: CGFloat {
-        switch (detail, isDrillable) {
+        switch (detail, displaysLarge) {
         case (.full, true): return 42
         case (.full, false): return 28
         case (.small, true): return 28
@@ -596,7 +750,7 @@ private struct PlaceMarker: View {
     }
 
     private var iconSize: CGFloat {
-        switch (detail, isDrillable) {
+        switch (detail, displaysLarge) {
         case (.full, true): return 18
         case (.full, false): return 13
         case (.small, true): return 13
@@ -605,7 +759,7 @@ private struct PlaceMarker: View {
     }
 
     private var borderWidth: CGFloat {
-        switch (detail, isDrillable) {
+        switch (detail, displaysLarge) {
         case (.full, true): return 3
         case (.full, false): return 2
         case (.small, true): return 2
@@ -614,7 +768,7 @@ private struct PlaceMarker: View {
     }
 
     private var showsIcon: Bool {
-        !(detail == .small && !isDrillable)
+        !(detail == .small && !displaysLarge)
     }
 
     private var scale: CGFloat {
@@ -667,6 +821,20 @@ private struct NightBadge: View {
         .padding(.vertical, 2)
         .background(.white, in: Capsule())
         .overlay(Capsule().strokeBorder(.indigo.opacity(0.4), lineWidth: 0.5))
+    }
+}
+
+private struct EntryExitBadge: View {
+    let time: String
+
+    var body: some View {
+        Text(time)
+            .font(.system(size: 10, weight: .semibold))
+            .monospacedDigit()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().stroke(.separator.opacity(0.5), lineWidth: 0.5))
     }
 }
 
@@ -924,6 +1092,31 @@ private struct PlacePopover: View {
         return document.times(at: coord, day: lastDay)?.departure
     }
 
+    private var stayDuration: String? {
+        guard let firstDay = feature.days.first,
+              let lastDay = feature.days.last,
+              let arrivalDate = combinedDate(day: firstDay, time: arrivalTime),
+              let departureDate = combinedDate(day: lastDay, time: departureTime)
+        else { return nil }
+        let totalMinutes = Int(departureDate.timeIntervalSince(arrivalDate) / 60)
+        guard totalMinutes > 0 else { return nil }
+        let days = totalMinutes / (24 * 60)
+        let hours = (totalMinutes % (24 * 60)) / 60
+        if days > 0 && hours > 0 { return "\(days)d \(hours)h" }
+        if days > 0 { return "\(days)d" }
+        return "\(hours)h"
+    }
+
+    private func combinedDate(day: Int, time: String?) -> Date? {
+        guard let time, let baseDate = document.date(forDay: day) else { return nil }
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2 else { return nil }
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: baseDate)
+        components.hour = parts[0]
+        components.minute = parts[1]
+        return Calendar.current.date(from: components)
+    }
+
     private var popoverBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
@@ -943,6 +1136,9 @@ private struct PlacePopover: View {
                     }
                 }
                 Spacer(minLength: 0)
+                if let stayDuration {
+                    DurationBadge(duration: stayDuration)
+                }
                 if feature.nights > 0 {
                     NightBadgeLarge(count: feature.nights)
                 }
@@ -953,20 +1149,27 @@ private struct PlacePopover: View {
                             startTime: arrivalTime,
                             endTime: departureTime)
             }
-            if canOpen, let name = feature.name {
-                Button(action: onOpen) {
-                    Label("Open \(name)", systemImage: "arrow.down.right.circle")
-                        .frame(maxWidth: .infinity)
+            HStack(spacing: 8) {
+                if canOpen, let name = feature.name {
+                    Button(action: onOpen) {
+                        Label("Open \(name)", systemImage: "arrow.down.right.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                } else {
+                    Spacer(minLength: 0)
                 }
-                .controlSize(.regular)
-            }
-            if showsBookingButton, let url = resolvedBookingURL {
-                Link(destination: url) {
-                    Label(bookingLabel, systemImage: "arrow.up.right.square")
-                        .frame(maxWidth: .infinity)
+                if showsBookingButton, let url = resolvedBookingURL {
+                    ActionIconLink(url: url, systemImage: bookingIcon, helpText: bookingLabel)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+                if let coord = feature.coordinates.first,
+                   let mapsURL = googleMapsURL(coord: coord, name: feature.name) {
+                    ActionIconLink(url: mapsURL, systemImage: "map.fill", helpText: "Open in Google Maps")
+                }
+                if let youtubeURL = youtubeSearchURL(for: feature) {
+                    ActionIconLink(url: youtubeURL, systemImage: "play.rectangle.fill", helpText: "Search on YouTube")
+                }
             }
         }
     }
@@ -975,6 +1178,13 @@ private struct PlacePopover: View {
         switch feature.kind?.lowercased() {
         case "restaurant", "food", "dining": return "Reserve a table"
         default: return "Book a stay"
+        }
+    }
+
+    private var bookingIcon: String {
+        switch feature.kind?.lowercased() {
+        case "restaurant", "food", "dining": return "fork.knife"
+        default: return "bed.double.fill"
         }
     }
 
@@ -1022,6 +1232,22 @@ private struct ImageRefreshButton: View {
         }
         .buttonStyle(.plain)
         .help("Try a different image")
+    }
+}
+
+private struct ActionIconLink: View {
+    let url: URL
+    let systemImage: String
+    let helpText: String
+
+    var body: some View {
+        Link(destination: url) {
+            Image(systemName: systemImage)
+                .frame(width: 16, height: 16)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help(helpText)
     }
 }
 
@@ -1109,20 +1335,18 @@ private struct TransitPopover: View {
                         if let duration = validatedDuration ?? feature.duration {
                             DurationBadge(duration: duration)
                         }
+                        if showsBookingButton, let url = resolvedBookingURL {
+                            ActionIconLink(url: url, systemImage: "ticket.fill", helpText: "Book ticket")
+                        }
+                        if let youtubeURL = youtubeSearchURL(for: feature) {
+                            ActionIconLink(url: youtubeURL, systemImage: "play.rectangle.fill", helpText: "Search on YouTube")
+                        }
                     }
                     if !feature.days.isEmpty {
                         DayTimeline(days: feature.days,
                                     document: document,
                                     startTime: feature.departure,
                                     endTime: validatedArrival ?? feature.arrival)
-                    }
-                    if showsBookingButton, let url = resolvedBookingURL {
-                        Link(destination: url) {
-                            Label("Book ticket", systemImage: "arrow.up.right.square")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.regular)
                     }
                 }
                 .padding(16)
