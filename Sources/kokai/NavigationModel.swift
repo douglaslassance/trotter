@@ -40,6 +40,15 @@ final class NavigationModel {
         fitTrigger &+= 1
     }
 
+    func goHome() {
+        guard let root = stack.first else { return }
+        savedRegions.removeValue(forKey: root.id)
+        if stack.count > 1 {
+            stack = [root]
+        }
+        fitTrigger &+= 1
+    }
+
     var current: Level? { stack.last }
     var canGoBack: Bool { stack.count > 1 }
 

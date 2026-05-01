@@ -478,11 +478,11 @@ private struct BreadcrumbBar: View {
     var body: some View {
         if !nav.stack.isEmpty {
             HStack(spacing: 6) {
-                Button { nav.requestFit() } label: {
-                    Image(systemName: "house.fill")
+                Button { nav.goHome() } label: {
+                    Image(systemName: "map.fill")
                 }
                 .buttonStyle(.borderless)
-                .help("Frame the current map")
+                .help("Show the full trip map")
 
                 ForEach(Array(nav.stack.enumerated()), id: \.element.id) { index, level in
                     if index > 0 {
