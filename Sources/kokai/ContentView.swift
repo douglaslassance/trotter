@@ -434,15 +434,32 @@ private struct TripInfoBar: View {
 private struct DayLegend: View {
     let document: KMLDocument
     let days: [Int]
+    @State private var weatherByDay: [Int: WeatherSummary] = [:]
+
+    private func coordinate(for day: Int) -> CLLocationCoordinate2D? {
+        for feature in document.features where feature.days.contains(day) {
+            if let coord = feature.coordinates.first { return coord }
+        }
+        return nil
+    }
 
     var body: some View {
         if !days.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(days, id: \.self) { day in
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(color(forDay: day))
-                            .frame(width: 10, height: 10)
+                        if let summary = weatherByDay[day] {
+                            Image(systemName: weatherIcon(for: summary.code))
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(color(forDay: day))
+                                .frame(width: 14)
+                                .help(weatherTooltip(for: summary))
+                        } else {
+                            Circle()
+                                .fill(color(forDay: day))
+                                .frame(width: 10, height: 10)
+                                .frame(width: 14)
+                        }
                         if let date = document.date(forDay: day) {
                             Text(formatDate(date))
                                 .font(.caption.bold())
@@ -454,6 +471,7 @@ private struct DayLegend: View {
                     }
                 }
             }
+            .task(id: legendKey) { await loadWeather() }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
@@ -461,6 +479,27 @@ private struct DayLegend: View {
                 .stroke(AnyShapeStyle(.separator), lineWidth: 0.5))
             .shadow(radius: 4, y: 2)
         }
+    }
+
+    private var legendKey: String {
+        days.map(String.init).joined(separator: ",")
+    }
+
+    private func loadWeather() async {
+        guard document.showsWeather else {
+            await MainActor.run { weatherByDay = [:] }
+            return
+        }
+        var results: [Int: WeatherSummary] = [:]
+        for day in days {
+            guard let coord = coordinate(for: day),
+                  let date = document.date(forDay: day) else { continue }
+            if let summary = await WeatherResolver.shared.summary(for: coord, date: date) {
+                results[day] = summary
+            }
+        }
+        let collected = results
+        await MainActor.run { weatherByDay = collected }
     }
 }
 
