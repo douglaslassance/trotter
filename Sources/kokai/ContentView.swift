@@ -937,8 +937,6 @@ private struct BadWeatherBadge: View {
             .foregroundStyle(.white)
             .padding(4)
             .background(Circle().fill(Color.orange))
-            .overlay(Circle().strokeBorder(.white, lineWidth: 1))
-            .shadow(radius: 1, y: 0.5)
             .help("Bad weather expected")
     }
 }
