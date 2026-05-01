@@ -1424,7 +1424,7 @@ private struct TransitPopover: View {
                     .frame(height: 160)
                     .clipped()
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(feature.name ?? "Transit")
@@ -1435,18 +1435,21 @@ private struct TransitPopover: View {
                         if let duration = validatedDuration ?? feature.duration {
                             DurationBadge(duration: duration)
                         }
-                        if showsBookingButton, let url = resolvedBookingURL {
-                            ActionIconLink(url: url, systemImage: "ticket.fill", helpText: "Book ticket")
-                        }
-                        if let youtubeURL = youtubeSearchURL(for: feature) {
-                            ActionIconLink(url: youtubeURL, systemImage: "play.rectangle.fill", helpText: "Search on YouTube")
-                        }
                     }
                     if !feature.days.isEmpty {
                         DayTimeline(days: feature.days,
                                     document: document,
                                     startTime: feature.departure,
                                     endTime: validatedArrival ?? feature.arrival)
+                    }
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        if showsBookingButton, let url = resolvedBookingURL {
+                            ActionIconLink(url: url, systemImage: "ticket.fill", helpText: "Book ticket")
+                        }
+                        if let youtubeURL = youtubeSearchURL(for: feature) {
+                            ActionIconLink(url: youtubeURL, systemImage: "play.rectangle.fill", helpText: "Search on YouTube")
+                        }
                     }
                 }
                 .padding(16)
