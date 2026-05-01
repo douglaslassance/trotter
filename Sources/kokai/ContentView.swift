@@ -138,7 +138,8 @@ private func kindSearchTerm(_ kind: String?) -> String? {
 private func bookingActionTerm(for kind: String?) -> String {
     switch kind?.lowercased() {
     case "restaurant", "food", "dining": return "reservation"
-    default: return "booking"
+    case "hotel", "ryokan", "accommodation": return "booking"
+    default: return "tickets booking"
     }
 }
 
@@ -1143,7 +1144,11 @@ private struct PlacePopover: View {
     @State private var imageRefreshTrigger = 0
 
     private var bookableKinds: Set<String> {
-        ["hotel", "ryokan", "accommodation", "restaurant", "food", "dining"]
+        ["hotel", "ryokan", "accommodation",
+         "restaurant", "food", "dining",
+         "museum", "gallery", "architecture",
+         "onsen", "hot_spring", "bath",
+         "castle", "garden"]
     }
 
     private var showsBookingButton: Bool {
@@ -1269,14 +1274,16 @@ private struct PlacePopover: View {
     private var bookingLabel: String {
         switch feature.kind?.lowercased() {
         case "restaurant", "food", "dining": return "Reserve a table"
-        default: return "Book a stay"
+        case "hotel", "ryokan", "accommodation": return "Book a stay"
+        default: return "Book a ticket"
         }
     }
 
     private var bookingIcon: String {
         switch feature.kind?.lowercased() {
         case "restaurant", "food", "dining": return "fork.knife"
-        default: return "bed.double.fill"
+        case "hotel", "ryokan", "accommodation": return "bed.double.fill"
+        default: return "ticket.fill"
         }
     }
 
