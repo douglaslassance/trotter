@@ -43,6 +43,26 @@ struct KMLDocument {
         var departure: String?
     }
 
+    func inboundTransit(at coord: CLLocationCoordinate2D, day: Int) -> KMLFeature? {
+        for feature in features {
+            guard case .lineString(let line) = feature, feature.days.contains(day) else { continue }
+            if let last = line.coordinates.last, KMLDocument.coordsEqual(last, coord) {
+                return feature
+            }
+        }
+        return nil
+    }
+
+    func outboundTransit(at coord: CLLocationCoordinate2D, day: Int) -> KMLFeature? {
+        for feature in features {
+            guard case .lineString(let line) = feature, feature.days.contains(day) else { continue }
+            if let first = line.coordinates.first, KMLDocument.coordsEqual(first, coord) {
+                return feature
+            }
+        }
+        return nil
+    }
+
     func times(at coord: CLLocationCoordinate2D, day: Int) -> DayTimes? {
         var result = DayTimes()
         for feature in features {

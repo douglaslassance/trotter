@@ -10,7 +10,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "town": return "house.fill"
     case "village": return "house"
     case "restaurant", "food", "dining": return "fork.knife"
-    case "cafe", "coffee": return "cup.and.saucer.fill"
+    case "cafe", "coffee": return "mug.fill"
     case "bar", "pub", "izakaya": return "wineglass"
     case "bookstore", "books": return "books.vertical.fill"
     case "record", "records", "music": return "music.note"
@@ -1065,6 +1065,7 @@ private struct PlacePopover: View {
             VStack(alignment: .leading, spacing: 0) {
                 HeroImage(explicitURL: feature.attributes["image_url"],
                           wikipediaQuery: feature.name,
+                          kind: feature.kind,
                           vehicle: nil,
                           days: feature.days,
                           coordinate: feature.coordinates.first,
@@ -1317,6 +1318,7 @@ private struct TransitPopover: View {
             VStack(alignment: .leading, spacing: 0) {
                 HeroImage(explicitURL: feature.attributes["image_url"],
                           wikipediaQuery: feature.name,
+                          kind: feature.kind,
                           vehicle: feature.vehicle,
                           days: feature.days,
                           coordinate: feature.coordinates.first,
@@ -1633,6 +1635,7 @@ private actor DiskImageCache {
 private struct HeroImage: View {
     let explicitURL: String?
     let wikipediaQuery: String?
+    let kind: String?
     let vehicle: String?
     let days: [Int]
     let coordinate: CLLocationCoordinate2D?
@@ -1766,6 +1769,9 @@ private struct HeroImage: View {
         var parts: [String] = []
         if let v = vehicleWikipediaQuery(vehicle)?.lowercased() {
             parts.append(v)
+        }
+        if let k = humanizedKind(kind)?.lowercased(), !k.isEmpty {
+            parts.append(k)
         }
         if let coord, let country = await CountryResolver.shared.country(for: coord) {
             parts.append(country)
