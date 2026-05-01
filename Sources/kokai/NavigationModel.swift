@@ -1,4 +1,5 @@
 import Foundation
+import MapKit
 import Observation
 
 @Observable
@@ -21,6 +22,15 @@ final class NavigationModel {
     private(set) var stack: [Level] = []
     private(set) var recentURLs: [URL] = []
     private var lastModified: [URL: Date] = [:]
+    private var savedRegions: [UUID: MKCoordinateRegion] = [:]
+
+    func saveRegion(_ region: MKCoordinateRegion, for levelID: UUID) {
+        savedRegions[levelID] = region
+    }
+
+    func region(for levelID: UUID) -> MKCoordinateRegion? {
+        savedRegions[levelID]
+    }
 
     var current: Level? { stack.last }
     var canGoBack: Bool { stack.count > 1 }

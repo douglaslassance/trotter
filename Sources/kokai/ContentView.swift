@@ -38,6 +38,24 @@ private func iconForKind(_ kind: String?) -> String {
     }
 }
 
+// Kinds that typically have a Wikipedia article worth pulling an image from.
+// Cafes, bars, bookstores, record shops, craft stores and individual restaurants
+// rarely have one, so we skip the search and fall back to the gradient + icon.
+private func kindUsesImageSearch(_ kind: String?) -> Bool {
+    switch kind?.lowercased() {
+    case "cafe", "coffee",
+         "bar", "pub", "izakaya",
+         "bookstore", "books",
+         "record", "records", "music",
+         "craft", "crafts", "artisan",
+         "restaurant", "food", "dining",
+         "shopping", "market":
+        return false
+    default:
+        return true
+    }
+}
+
 private func humanizedKind(_ kind: String?) -> String? {
     guard let kind = kind?.lowercased(), !kind.isEmpty else { return nil }
     switch kind {
@@ -457,11 +475,21 @@ private struct EmptyState: View {
 private struct BreadcrumbBar: View {
     @Bindable var nav: NavigationModel
 
+    private var parentTitle: String? {
+        guard nav.stack.count >= 2 else { return nil }
+        return nav.stack[nav.stack.count - 2].title
+    }
+
     var body: some View {
         if !nav.stack.isEmpty {
             HStack(spacing: 6) {
                 Button { nav.goBack() } label: {
-                    Image(systemName: "chevron.left")
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        if let parentTitle {
+                            Text(parentTitle)
+                        }
+                    }
                 }
                 .disabled(!nav.canGoBack)
                 .buttonStyle(.borderless)
@@ -521,8 +549,12 @@ private struct MapLevelView: View {
         self.nav = nav
         self._selection = selection
         self._visibleDays = visibleDays
-        let initialRect = Self.boundingRect(for: level.document.features)
-        _position = State(initialValue: initialRect.map { .rect($0) } ?? .automatic)
+        if let saved = nav.region(for: level.id) {
+            _position = State(initialValue: .region(saved))
+        } else {
+            let initialRect = Self.boundingRect(for: level.document.features)
+            _position = State(initialValue: initialRect.map { .rect($0) } ?? .automatic)
+        }
     }
 
     var body: some View {
@@ -542,6 +574,7 @@ private struct MapLevelView: View {
         .onMapCameraChange(frequency: .continuous) { ctx in
             latitudeSpan = ctx.region.span.latitudeDelta
             updateVisibleDays(region: ctx.region)
+            nav.saveRegion(ctx.region, for: level.id)
         }
     }
 
@@ -1799,7 +1832,8 @@ private struct HeroImage: View {
             return url
         }
         let context = await searchContext(coord: coordinate, vehicle: vehicle)
-        if let q = wikipediaQuery, !q.isEmpty,
+        if kindUsesImageSearch(kind),
+           let q = wikipediaQuery, !q.isEmpty,
            let url = await WikipediaImageResolver.shared.imageURL(for: q, context: context) {
             return url
         }
@@ -1815,7 +1849,7 @@ private struct HeroImage: View {
             return [url]
         }
         var urls: [URL] = []
-        if let q = query, !q.isEmpty {
+        if kindUsesImageSearch(kind), let q = query, !q.isEmpty {
             urls.append(contentsOf: await WikipediaImageResolver.shared.candidates(for: q, context: context))
         }
         if let vQuery = vehicleWikipediaQuery(vehicle) {
