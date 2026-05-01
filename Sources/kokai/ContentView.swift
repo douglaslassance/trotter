@@ -1158,8 +1158,8 @@ private struct PlacePopover: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
                 HeroImage(explicitURL: feature.attributes["image_url"],
                           wikipediaQuery: feature.name,
                           kind: feature.kind,
@@ -1169,12 +1169,17 @@ private struct PlacePopover: View {
                           refreshTrigger: imageRefreshTrigger)
                     .frame(height: 160)
                     .clipped()
-
-                popoverBody
-                    .padding(16)
+                ImageRefreshButton { imageRefreshTrigger += 1 }
+                    .padding(8)
+                if let weather {
+                    WeatherBadge(summary: weather)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
             }
-            ImageRefreshButton { imageRefreshTrigger += 1 }
-                .padding(8)
+
+            popoverBody
+                .padding(16)
         }
         .frame(width: 320)
         .task { await resolveBooking() }
@@ -1235,9 +1240,6 @@ private struct PlacePopover: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if let weather {
-                    WeatherBadge(summary: weather)
-                }
                 if let stayDuration {
                     DurationBadge(duration: stayDuration)
                 }
