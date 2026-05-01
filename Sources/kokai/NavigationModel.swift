@@ -23,6 +23,7 @@ final class NavigationModel {
     private(set) var recentURLs: [URL] = []
     private var lastModified: [URL: Date] = [:]
     private var savedRegions: [UUID: MKCoordinateRegion] = [:]
+    private(set) var fitTrigger: Int = 0
 
     func saveRegion(_ region: MKCoordinateRegion, for levelID: UUID) {
         savedRegions[levelID] = region
@@ -30,6 +31,13 @@ final class NavigationModel {
 
     func region(for levelID: UUID) -> MKCoordinateRegion? {
         savedRegions[levelID]
+    }
+
+    func requestFit() {
+        if let id = current?.id {
+            savedRegions.removeValue(forKey: id)
+        }
+        fitTrigger &+= 1
     }
 
     var current: Level? { stack.last }

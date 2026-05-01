@@ -478,11 +478,11 @@ private struct BreadcrumbBar: View {
     var body: some View {
         if !nav.stack.isEmpty {
             HStack(spacing: 6) {
-                Button { nav.goBack() } label: {
-                    Image(systemName: "chevron.left")
+                Button { nav.requestFit() } label: {
+                    Image(systemName: "house.fill")
                 }
-                .disabled(!nav.canGoBack)
                 .buttonStyle(.borderless)
+                .help("Frame the current map")
 
                 ForEach(Array(nav.stack.enumerated()), id: \.element.id) { index, level in
                     if index > 0 {
@@ -565,6 +565,13 @@ private struct MapLevelView: View {
             latitudeSpan = ctx.region.span.latitudeDelta
             updateVisibleDays(region: ctx.region)
             nav.saveRegion(ctx.region, for: level.id)
+        }
+        .onChange(of: nav.fitTrigger) { _, _ in
+            if let rect = Self.boundingRect(for: level.document.features) {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    position = .rect(rect)
+                }
+            }
         }
     }
 
