@@ -643,10 +643,10 @@ private struct MapLevelView: View {
             let detail = markerDetail(forSpan: latitudeSpan)
             let markerSize: CGFloat = {
                 switch (detail, prominent) {
-                case (.full, true): return 42
-                case (.full, false): return 28
-                case (.small, true): return 28
-                case (.small, false): return 14
+                case (.full, true): return 46
+                case (.full, false): return 31
+                case (.small, true): return 31
+                case (.small, false): return 15
                 }
             }()
             let isPOI = feature.days.isEmpty
@@ -663,7 +663,7 @@ private struct MapLevelView: View {
                     if detail == .full, let name = point.name, !name.isEmpty {
                         PlaceLabel(text: name, isDrillable: prominent)
                             .fixedSize()
-                            .offset(y: prominent ? 34 : 21)
+                            .offset(y: prominent ? 37 : 23)
                             .allowsHitTesting(false)
                     }
                 }
@@ -879,18 +879,18 @@ private struct PlaceMarker: View {
 
     private var size: CGFloat {
         switch (detail, displaysLarge) {
-        case (.full, true): return 42
-        case (.full, false): return 28
-        case (.small, true): return 28
-        case (.small, false): return 14
+        case (.full, true): return 46
+        case (.full, false): return 31
+        case (.small, true): return 31
+        case (.small, false): return 15
         }
     }
 
     private var iconSize: CGFloat {
         switch (detail, displaysLarge) {
-        case (.full, true): return 18
-        case (.full, false): return 13
-        case (.small, true): return 13
+        case (.full, true): return 20
+        case (.full, false): return 14
+        case (.small, true): return 14
         case (.small, false): return 0
         }
     }
