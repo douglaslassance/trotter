@@ -568,7 +568,7 @@ private struct MapLevelView: View {
         switch feature {
         case .point(let point):
             let drillable = childExists(for: feature)
-            let prominent = drillable || feature.nights > 0
+            let prominent = feature.nights > 0
             let detail = markerDetail(forSpan: latitudeSpan)
             let markerSize: CGFloat = {
                 switch (detail, prominent) {
@@ -799,7 +799,7 @@ private struct PlaceMarker: View {
     var detail: MarkerDetail = .full
     @State private var isHovering = false
 
-    private var displaysLarge: Bool { isDrillable || nights > 0 }
+    private var displaysLarge: Bool { nights > 0 }
 
     private var size: CGFloat {
         switch (detail, displaysLarge) {
