@@ -851,12 +851,14 @@ private struct PlaceMarker: View {
     }
 
     private var borderWidth: CGFloat {
+        let base: CGFloat
         switch (detail, displaysLarge) {
-        case (.full, true): return 3
-        case (.full, false): return 2
-        case (.small, true): return 2
-        case (.small, false): return 1.5
+        case (.full, true): base = 3
+        case (.full, false): base = 2
+        case (.small, true): base = 2
+        case (.small, false): base = 1.5
         }
+        return isDrillable ? base : max(0.75, base * 0.5)
     }
 
     private var showsIcon: Bool {
@@ -950,6 +952,7 @@ private struct DayTimeline: View {
     let document: KMLDocument
     var startTime: String? = nil
     var endTime: String? = nil
+    var weatherByDay: [Int: WeatherSummary] = [:]
 
     private var gradientColors: [Color] {
         if days.isEmpty { return [.gray] }
@@ -985,16 +988,33 @@ private struct DayTimeline: View {
                     }
                 }
             }
-            Capsule()
-                .fill(LinearGradient(
-                    colors: gradientColors,
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ))
-                .frame(height: 10)
-                .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 0.5))
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 4)
+            VStack(spacing: 2) {
+                if !weatherByDay.isEmpty {
+                    HStack(spacing: 0) {
+                        ForEach(days, id: \.self) { day in
+                            if let summary = weatherByDay[day] {
+                                Image(systemName: weatherIcon(for: summary.code))
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+                                    .frame(maxWidth: .infinity)
+                                    .help(weatherTooltip(for: summary))
+                            } else {
+                                Color.clear.frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                }
+                Capsule()
+                    .fill(LinearGradient(
+                        colors: gradientColors,
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ))
+                    .frame(height: 10)
+                    .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 0.5))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 4)
             if endTime != nil || endDate != nil {
                 VStack(alignment: .trailing, spacing: 2) {
                     if let endDate {
@@ -1021,6 +1041,13 @@ private struct TransitBadge: View {
     let detail: BadgeDetail
 
     @State private var validation: TransitValidator.Result?
+    @State private var isHovering = false
+
+    private var scale: CGFloat {
+        if isSelected { return 1.1 }
+        if isHovering { return 1.06 }
+        return 1.0
+    }
 
     var body: some View {
         Group {
@@ -1035,8 +1062,11 @@ private struct TransitBadge: View {
         }
         .opacity(detail == .hidden ? 0 : 1)
         .allowsHitTesting(detail != .hidden)
+        .scaleEffect(scale)
+        .onHover { isHovering = $0 }
         .animation(.snappy, value: detail)
-        .animation(.snappy, value: isSelected)
+        .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isHovering)
+        .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isSelected)
         .task { await validate() }
     }
 
@@ -1051,7 +1081,6 @@ private struct TransitBadge: View {
                 .foregroundStyle(.primary)
         }
         .frame(width: 24, height: 24)
-        .scaleEffect(isSelected ? 1.1 : 1.0)
     }
 
     private var fullBody: some View {
@@ -1092,7 +1121,6 @@ private struct TransitBadge: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
         }
-        .scaleEffect(isSelected ? 1.05 : 1.0)
     }
 
     private var validationDotColor: Color? {
@@ -1142,7 +1170,7 @@ private struct PlacePopover: View {
 
     @State private var resolvedBookingURL: URL?
     @State private var imageRefreshTrigger = 0
-    @State private var weather: WeatherSummary?
+    @State private var weatherByDay: [Int: WeatherSummary] = [:]
 
     private var bookableKinds: Set<String> {
         ["hotel", "ryokan", "accommodation",
@@ -1171,11 +1199,6 @@ private struct PlacePopover: View {
                     .clipped()
                 ImageRefreshButton { imageRefreshTrigger += 1 }
                     .padding(8)
-                if let weather {
-                    WeatherBadge(summary: weather)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
             }
 
             popoverBody
@@ -1251,7 +1274,8 @@ private struct PlacePopover: View {
                 DayTimeline(days: feature.days,
                             document: document,
                             startTime: arrivalTime,
-                            endTime: departureTime)
+                            endTime: departureTime,
+                            weatherByDay: weatherByDay)
             }
             HStack(spacing: 8) {
                 if canOpen, let name = feature.name {
@@ -1304,11 +1328,16 @@ private struct PlacePopover: View {
     }
 
     private func resolveWeather() async {
-        guard let coord = feature.coordinates.first,
-              let day = feature.days.first,
-              let date = document.date(forDay: day) else { return }
-        let summary = await WeatherResolver.shared.summary(for: coord, date: date)
-        await MainActor.run { weather = summary }
+        guard let coord = feature.coordinates.first else { return }
+        var results: [Int: WeatherSummary] = [:]
+        for day in feature.days {
+            guard let date = document.date(forDay: day) else { continue }
+            if let summary = await WeatherResolver.shared.summary(for: coord, date: date) {
+                results[day] = summary
+            }
+        }
+        let collected = results
+        await MainActor.run { weatherByDay = collected }
     }
 }
 
@@ -1702,6 +1731,13 @@ struct WeatherSummary: Equatable {
     let lowC: Double
     let code: Int
     let isHistorical: Bool
+}
+
+private func weatherTooltip(for summary: WeatherSummary) -> String {
+    let high = Int(summary.highC.rounded())
+    let low = Int(summary.lowC.rounded())
+    let prefix = summary.isHistorical ? "Typical (last year)" : "Forecast"
+    return "\(prefix): \(high)° / \(low)°"
 }
 
 private func weatherIcon(for code: Int) -> String {
