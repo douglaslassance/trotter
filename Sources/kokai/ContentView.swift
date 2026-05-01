@@ -20,7 +20,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "viewpoint", "lookout": return "eye.fill"
     case "temple": return "building.columns.fill"
     case "shrine": return "building.columns"
-    case "museum": return "paintpalette.fill"
+    case "museum": return "photo.artframe"
     case "gallery": return "photo.fill"
     case "landmark": return "mappin"
     case "beach": return "water.waves"
