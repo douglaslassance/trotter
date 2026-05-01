@@ -331,11 +331,12 @@ private func curvedApex(of original: [CLLocationCoordinate2D]) -> CLLocationCoor
 struct ContentView: View {
     @Bindable var nav: NavigationModel
     @State private var selectionID: UUID?
+    @State private var visibleDays: [Int] = []
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             if let level = nav.current {
-                MapLevelView(level: level, nav: nav, selection: $selectionID)
+                MapLevelView(level: level, nav: nav, selection: $selectionID, visibleDays: $visibleDays)
                     .id(level.id)
             } else {
                 EmptyState()
@@ -344,13 +345,14 @@ struct ContentView: View {
                 BreadcrumbBar(nav: nav)
                 if let level = nav.current {
                     TripInfoBar(document: level.document)
-                    DayLegend(document: level.document)
+                    DayLegend(document: level.document, days: visibleDays)
                 }
             }
             .padding(12)
         }
         .onChange(of: nav.current?.id) {
             selectionID = nil
+            visibleDays = []
         }
     }
 }
@@ -412,11 +414,7 @@ private struct TripInfoBar: View {
 
 private struct DayLegend: View {
     let document: KMLDocument
-
-    private var days: [Int] {
-        let unique = Set(document.features.flatMap(\.days))
-        return unique.sorted()
-    }
+    let days: [Int]
 
     var body: some View {
         if !days.isEmpty {
@@ -511,13 +509,18 @@ private struct MapLevelView: View {
     let level: NavigationModel.Level
     @Bindable var nav: NavigationModel
     @Binding var selection: UUID?
+    @Binding var visibleDays: [Int]
     @State private var position: MapCameraPosition
     @State private var latitudeSpan: Double = 0
 
-    init(level: NavigationModel.Level, nav: NavigationModel, selection: Binding<UUID?>) {
+    init(level: NavigationModel.Level,
+         nav: NavigationModel,
+         selection: Binding<UUID?>,
+         visibleDays: Binding<[Int]>) {
         self.level = level
         self.nav = nav
         self._selection = selection
+        self._visibleDays = visibleDays
         let initialRect = Self.boundingRect(for: level.document.features)
         _position = State(initialValue: initialRect.map { .rect($0) } ?? .automatic)
     }
@@ -538,7 +541,26 @@ private struct MapLevelView: View {
         }
         .onMapCameraChange(frequency: .continuous) { ctx in
             latitudeSpan = ctx.region.span.latitudeDelta
+            updateVisibleDays(region: ctx.region)
         }
+    }
+
+    private func updateVisibleDays(region: MKCoordinateRegion) {
+        let minLat = region.center.latitude - region.span.latitudeDelta / 2
+        let maxLat = region.center.latitude + region.span.latitudeDelta / 2
+        let minLon = region.center.longitude - region.span.longitudeDelta / 2
+        let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+        var seen = Set<Int>()
+        for feature in level.document.features where !feature.days.isEmpty {
+            let coords = feature.coordinates
+            let inside = coords.contains { c in
+                c.latitude >= minLat && c.latitude <= maxLat &&
+                c.longitude >= minLon && c.longitude <= maxLon
+            }
+            if inside { seen.formUnion(feature.days) }
+        }
+        let sorted = seen.sorted()
+        if sorted != visibleDays { visibleDays = sorted }
     }
 
     @MapContentBuilder
