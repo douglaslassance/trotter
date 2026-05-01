@@ -1282,7 +1282,6 @@ private struct PlacePopover: View {
     private var bookingIcon: String {
         switch feature.kind?.lowercased() {
         case "restaurant", "food", "dining": return "fork.knife"
-        case "hotel", "ryokan", "accommodation": return "bed.double.fill"
         default: return "ticket.fill"
         }
     }
