@@ -14,7 +14,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "bar", "pub", "izakaya": return "wineglass"
     case "bookstore", "books": return "books.vertical.fill"
     case "record", "records", "music": return "opticaldisc.fill"
-    case "craft", "crafts", "artisan": return "hammer.fill"
+    case "craft", "crafts", "artisan": return "paintbrush.pointed.fill"
     case "architecture", "building": return "building.2.crop.circle.fill"
     case "park", "natural_park", "nature": return "leaf.fill"
     case "viewpoint", "lookout": return "eye.fill"
@@ -32,7 +32,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "castle": return "shield.fill"
     case "connection", "transfer": return "arrow.triangle.swap"
     case "airport": return "airplane"
-    case "station": return "building.fill"
+    case "station": return "tram.fill"
     case "port", "harbor": return "ferry.fill"
     default: return "mappin"
     }
