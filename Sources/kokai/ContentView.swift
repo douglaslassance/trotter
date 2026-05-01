@@ -21,7 +21,7 @@ private func iconForKind(_ kind: String?) -> String {
     case "shrine": return "building.columns"
     case "museum": return "paintpalette.fill"
     case "gallery": return "photo.fill"
-    case "landmark": return "star.fill"
+    case "landmark": return "mappin"
     case "beach": return "water.waves"
     case "onsen", "hot_spring", "bath": return "drop.fill"
     case "accommodation", "hotel", "ryokan": return "bed.double.fill"
