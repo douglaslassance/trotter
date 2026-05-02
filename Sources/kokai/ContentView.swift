@@ -837,10 +837,10 @@ private struct MapLevelView: View {
             let detail = markerDetail(forSpan: latitudeSpan)
             let markerSize: CGFloat = {
                 switch (detail, prominent) {
-                case (.full, true): return 46
-                case (.full, false): return 31
-                case (.small, true): return 31
-                case (.small, false): return 15
+                case (.full, true): return 51
+                case (.full, false): return 34
+                case (.small, true): return 34
+                case (.small, false): return 17
                 }
             }()
             Annotation("", coordinate: point.coordinate, anchor: .center) {
@@ -856,7 +856,7 @@ private struct MapLevelView: View {
                     if detail == .full, let name = point.name, !name.isEmpty {
                         PlaceLabel(text: name, isDrillable: prominent)
                             .fixedSize()
-                            .offset(y: prominent ? 37 : 23)
+                            .offset(y: prominent ? 41 : 25)
                             .allowsHitTesting(false)
                     }
                 }
@@ -1072,18 +1072,18 @@ private struct PlaceMarker: View {
 
     private var size: CGFloat {
         switch (detail, displaysLarge) {
-        case (.full, true): return 46
-        case (.full, false): return 31
-        case (.small, true): return 31
-        case (.small, false): return 15
+        case (.full, true): return 51
+        case (.full, false): return 34
+        case (.small, true): return 34
+        case (.small, false): return 17
         }
     }
 
     private var iconSize: CGFloat {
         switch (detail, displaysLarge) {
-        case (.full, true): return 20
-        case (.full, false): return 14
-        case (.small, true): return 14
+        case (.full, true): return 22
+        case (.full, false): return 15
+        case (.small, true): return 15
         case (.small, false): return 0
         }
     }
@@ -1397,12 +1397,12 @@ private struct TransitBadge: View {
     }
 
     private var iconOnlyBody: some View {
-        circleMarker(size: 28, iconSize: 14)
+        circleMarker(size: 31, iconSize: 15)
     }
 
     private var fullBody: some View {
         VStack(spacing: 2) {
-            circleMarker(size: 42, iconSize: 20)
+            circleMarker(size: 46, iconSize: 22)
                 .overlay(alignment: .topLeading) {
                     switch validation {
                     case .validated:
