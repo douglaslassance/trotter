@@ -838,8 +838,15 @@ private struct MapLevelView: View {
             return curvedApex(of: line.coordinates)
         }
         let (count, index) = siblingTransits(for: feature, line: line)
-        let centered = Double(index) - Double(count - 1) / 2.0
-        let t = max(0.1, min(0.9, 0.5 + centered * 0.1))
+        // Spread siblings evenly across the curve, clamped between 0.15 and 0.85.
+        let t: Double
+        if count <= 1 {
+            t = 0.5
+        } else {
+            let lo = 0.15
+            let hi = 0.85
+            t = lo + (hi - lo) * Double(index) / Double(count - 1)
+        }
         return bezierPoint(
             at: t,
             from: start,
