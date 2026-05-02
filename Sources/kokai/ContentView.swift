@@ -764,7 +764,6 @@ private struct MapLevelView: View {
     @Binding var visibleFeatureIDs: Set<UUID>
     @State private var position: MapCameraPosition
     @State private var latitudeSpan: Double = 0
-    @State private var routePaths: [UUID: [CLLocationCoordinate2D]] = [:]
 
     init(level: NavigationModel.Level,
          nav: NavigationModel,
@@ -803,7 +802,6 @@ private struct MapLevelView: View {
             updateVisibleDays(region: ctx.region)
             nav.saveRegion(ctx.region, for: level.id)
         }
-        .task { await loadRoutePaths() }
         .onChange(of: nav.fitTrigger) { _, _ in
             if let rect = Self.boundingRect(for: level.document.features) {
                 withAnimation(.easeInOut(duration: 0.4)) {
@@ -854,24 +852,6 @@ private struct MapLevelView: View {
             latitude: coord.latitude + perpLat * amount,
             longitude: coord.longitude + perpLon * amount
         )
-    }
-
-    private func loadRoutePaths() async {
-        for feature in level.document.features {
-            guard case .lineString(let line) = feature,
-                  line.coordinates.count == 2,
-                  routePaths[feature.id] == nil else { continue }
-            if let path = await RoutePathResolver.shared.path(
-                from: line.coordinates[0],
-                to: line.coordinates[1],
-                vehicle: feature.vehicle
-            ) {
-                let id = feature.id
-                await MainActor.run { routePaths[id] = path }
-            }
-            // Throttle to avoid Apple Maps' burst rate limit (~50 req/min).
-            try? await Task.sleep(nanoseconds: 800_000_000)
-        }
     }
 
     private func updateVisibleDays(region: MKCoordinateRegion) {
@@ -973,15 +953,9 @@ private struct MapLevelView: View {
     @MapContentBuilder
     private func transitContent(feature: KMLFeature,
                                 line: KMLFeature.LineString) -> some MapContent {
-        let realPath = routePaths[feature.id]
-        let coords = realPath ?? curvedPath(line.coordinates)
-        let baseMarkerCoord: CLLocationCoordinate2D? = {
-            if let realPath, !realPath.isEmpty {
-                return realPath[realPath.count / 2]
-            }
-            return curvedApex(of: line.coordinates)
-        }()
-        let markerCoord = baseMarkerCoord.map { offsetMarker(coord: $0, for: feature, line: line) }
+        let coords = curvedPath(line.coordinates)
+        let markerCoord = curvedApex(of: line.coordinates)
+            .map { offsetMarker(coord: $0, for: feature, line: line) }
         MapPolyline(coordinates: coords)
             .stroke(dayShapeHorizontal(feature.days, anchors: level.document.dayAnchors), lineWidth: 3)
         if let mid = markerCoord {
