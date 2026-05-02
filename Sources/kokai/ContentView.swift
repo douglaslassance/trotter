@@ -1431,8 +1431,8 @@ private struct TransitBadge: View {
     }
 
     private func markerBody(width: CGFloat, height: CGFloat, iconSize: CGFloat, showDuration: Bool) -> some View {
-        let radius = min(width, height) * 0.28
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let diameter = max(width, height)
+        let shape = Circle()
         return VStack(spacing: 1) {
             Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
                 .font(.system(size: iconSize, weight: .semibold))
@@ -1448,7 +1448,7 @@ private struct TransitBadge: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .frame(width: width, height: height)
+        .frame(width: diameter, height: diameter)
         .background(shape.fill(.regularMaterial))
         .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
         .contentShape(shape)
