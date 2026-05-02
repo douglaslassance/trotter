@@ -528,10 +528,20 @@ private struct DayLegend: View {
         return entries.filter { $0.count > 0 }
     }
 
+    private static let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
+
     var body: some View {
         if !days.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        ForEach(Array(Self.weekdayLetters.enumerated()), id: \.offset) { _, letter in
+                            Text(letter)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24)
+                        }
+                    }
                     ForEach(rows) { row in
                         HStack(spacing: 4) {
                             ForEach(Array(row.cells.enumerated()), id: \.offset) { _, day in
@@ -590,8 +600,11 @@ private struct DayLegend: View {
                     }
                 }
                 if let date = document.date(forDay: day) {
-                    Text("\(Calendar.current.component(.day, from: date))")
-                        .font(.system(size: 9, weight: .semibold))
+                    let cal = Calendar(identifier: .gregorian)
+                    let d = cal.component(.day, from: date)
+                    let m = cal.component(.month, from: date)
+                    Text("\(d)-\(m)")
+                        .font(.system(size: 8, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -1215,9 +1228,9 @@ private struct DayTimeline: View {
                                         .fill(.white)
                                         .frame(width: 20, height: 20)
                                         .overlay(Circle().stroke(.separator, lineWidth: 0.5))
-                                        .shadow(radius: 1.5, y: 0.5)
                                     Image(systemName: weatherIcon(for: summary.code))
                                         .font(.system(size: 10, weight: .semibold))
+                                        .symbolRenderingMode(.monochrome)
                                         .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
                                         .help(weatherTooltip(for: summary))
                                 }
