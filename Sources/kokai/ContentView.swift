@@ -2032,10 +2032,9 @@ private func weatherTooltip(for summary: WeatherSummary) -> String {
 }
 
 private func isBadWeather(code: Int) -> Bool {
-    switch code {
-    case 65, 67, 82, 71, 73, 75, 77, 85, 86, 95, 96, 99: return true
-    default: return false
-    }
+    // Drizzle (51-57) or anything with precipitation (rain, snow, showers, thunder).
+    // Excludes clear (0-3) and fog (45, 48).
+    code >= 51
 }
 
 private func weatherIcon(for code: Int) -> String {
