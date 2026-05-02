@@ -292,7 +292,8 @@ private func formatDate(_ date: Date) -> String {
 
 private func bezierMid(from start: CLLocationCoordinate2D,
                        to end: CLLocationCoordinate2D,
-                       perpOffset: Double) -> CLLocationCoordinate2D {
+                       perpOffset: Double,
+                       sideSign: Double = 1) -> CLLocationCoordinate2D {
     let dLat = end.latitude - start.latitude
     let dLon = end.longitude - start.longitude
     let length = sqrt(dLat * dLat + dLon * dLon)
@@ -302,8 +303,8 @@ private func bezierMid(from start: CLLocationCoordinate2D,
             longitude: (start.longitude + end.longitude) / 2
         )
     }
-    // Bias the curve toward the upper (northern) side so trips read as little jumps,
-    // matching the way you mentally picture arcs on a globe.
+    // Default sign biases the curve toward the upper (northern) side; sideSign = -1 flips it
+    // so paired siblings can arc on opposite sides of the straight line.
     var perpLat = dLon / length
     var perpLon = -dLat / length
     if perpLat < 0 {
@@ -311,8 +312,8 @@ private func bezierMid(from start: CLLocationCoordinate2D,
         perpLon = -perpLon
     }
     return CLLocationCoordinate2D(
-        latitude: (start.latitude + end.latitude) / 2 + perpLat * perpOffset,
-        longitude: (start.longitude + end.longitude) / 2 + perpLon * perpOffset
+        latitude: (start.latitude + end.latitude) / 2 + perpLat * perpOffset * sideSign,
+        longitude: (start.longitude + end.longitude) / 2 + perpLon * perpOffset * sideSign
     )
 }
 
@@ -349,13 +350,14 @@ private func curveOffset(from start: CLLocationCoordinate2D,
     segmentLength(from: start, to: end) * lineCurveRatio
 }
 
-private func curvedPath(_ original: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+private func curvedPath(_ original: [CLLocationCoordinate2D],
+                        curveScale: Double = 1.0) -> [CLLocationCoordinate2D] {
     guard original.count >= 2 else { return original }
     var result: [CLLocationCoordinate2D] = []
     for i in 0..<original.count - 1 {
+        let baseOffset = curveOffset(from: original[i], to: original[i + 1])
         let segment = bezierSegment(from: original[i], to: original[i + 1],
-                                    perpOffset: curveOffset(from: original[i],
-                                                            to: original[i + 1]))
+                                    perpOffset: baseOffset * curveScale)
         if i == 0 {
             result.append(contentsOf: segment)
         } else {
@@ -830,28 +832,29 @@ private struct MapLevelView: View {
         return (siblings.count, index)
     }
 
+    private func curveScale(for feature: KMLFeature,
+                            line: KMLFeature.LineString) -> Double {
+        let (count, index) = siblingTransits(for: feature, line: line)
+        guard count > 1 else { return 1.0 }
+        // Fan siblings out by varying the perpendicular offset:
+        // 2 -> 0.6 / 1.4, 3 -> 0.5 / 1.0 / 1.5, etc.
+        let centered = Double(index) - Double(count - 1) / 2.0
+        return 1.0 + centered * 0.5
+    }
+
     private func markerPosition(for feature: KMLFeature,
-                                line: KMLFeature.LineString) -> CLLocationCoordinate2D? {
+                                line: KMLFeature.LineString,
+                                curveScale: Double) -> CLLocationCoordinate2D? {
         guard line.coordinates.count == 2,
               let start = line.coordinates.first,
               let end = line.coordinates.last else {
             return curvedApex(of: line.coordinates)
         }
-        let (count, index) = siblingTransits(for: feature, line: line)
-        // Spread siblings evenly across the curve, clamped between 0.15 and 0.85.
-        let t: Double
-        if count <= 1 {
-            t = 0.5
-        } else {
-            let lo = 0.15
-            let hi = 0.85
-            t = lo + (hi - lo) * Double(index) / Double(count - 1)
-        }
         return bezierPoint(
-            at: t,
+            at: 0.5,
             from: start,
             to: end,
-            perpOffset: curveOffset(from: start, to: end)
+            perpOffset: curveOffset(from: start, to: end) * curveScale
         )
     }
 
@@ -954,8 +957,9 @@ private struct MapLevelView: View {
     @MapContentBuilder
     private func transitContent(feature: KMLFeature,
                                 line: KMLFeature.LineString) -> some MapContent {
-        let coords = curvedPath(line.coordinates)
-        let markerCoord = markerPosition(for: feature, line: line)
+        let scale = curveScale(for: feature, line: line)
+        let coords = curvedPath(line.coordinates, curveScale: scale)
+        let markerCoord = markerPosition(for: feature, line: line, curveScale: scale)
         MapPolyline(coordinates: coords)
             .stroke(dayShapeHorizontal(feature.days, anchors: level.document.dayAnchors), lineWidth: 3)
         if let mid = markerCoord {
