@@ -2311,50 +2311,88 @@ private actor WeatherResolver {
     }
 
     private func fetchHistorical(coord: CLLocationCoordinate2D, date: Date) async -> WeatherSummary? {
-        // Sample the same calendar date across the past 3 years and take the most common
-        // weather code (mode), with averaged highs/lows. This dampens single-year anomalies.
+        // Sample the same calendar date across the past 5 years. We derive a
+        // synthetic weather code per sample from cloud_cover_mean + precipitation_sum
+        // because the raw weathercode reflects the worst event of the day (a 30-min
+        // shower turns an otherwise sunny day into "drizzle"), which makes the
+        // historical mode systematically pessimistic.
         let cal = Calendar(identifier: .gregorian)
         let cutoff = cal.date(byAdding: .day, value: -5, to: cal.startOfDay(for: Date())) ?? Date()
 
-        var samples: [(code: Int, high: Double, low: Double)] = []
-        for yearsBack in 1...3 {
-            guard let prior = cal.date(byAdding: .year, value: -yearsBack, to: date) else { continue }
-            let target = prior < cutoff ? prior : cutoff
-            let day = Self.dateFormatter.string(from: target)
-            let url = "https://archive-api.open-meteo.com/v1/archive?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,weathercode&start_date=\(day)&end_date=\(day)&timezone=auto"
-            if let s = await fetchRaw(urlString: url) {
-                samples.append(s)
+        let samples: [(code: Int, high: Double, low: Double)] = await withTaskGroup(of: [(code: Int, high: Double, low: Double)].self) { group in
+            for yearsBack in 1...5 {
+                guard let prior = cal.date(byAdding: .year, value: -yearsBack, to: date) else { continue }
+                let target = prior < cutoff ? prior : cutoff
+                let day = Self.dateFormatter.string(from: target)
+                let url = "https://archive-api.open-meteo.com/v1/archive?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,cloud_cover_mean,precipitation_sum&start_date=\(day)&end_date=\(day)&timezone=auto"
+                group.addTask { await self.fetchDerivedSeries(urlString: url) }
             }
+            var collected: [(code: Int, high: Double, low: Double)] = []
+            for await batch in group { collected.append(contentsOf: batch) }
+            return collected
         }
 
         guard !samples.isEmpty else { return nil }
 
-        // Mode of weather codes; tiebreak by lower (sunnier) code.
-        var counts: [Int: Int] = [:]
-        for s in samples { counts[s.code, default: 0] += 1 }
-        let maxCount = counts.values.max() ?? 0
-        let topCodes = counts.filter { $0.value == maxCount }.map(\.key).sorted()
-        let mode = topCodes.first ?? samples[0].code
+        // Bucket codes into broad categories first, then take the modal bucket.
+        // Raw-code mode over a long sample window collapses everything to "overcast"
+        // because clear/mainly-clear/partly-cloudy each lose to code 3 individually.
+        func bucket(_ code: Int) -> Int {
+            switch code {
+            case 0, 1, 2: return 0       // sunny-ish
+            case 3: return 1             // cloudy
+            case 45, 48: return 2        // fog
+            case 51, 53, 55, 56, 57: return 3 // drizzle
+            case 61, 63, 65, 66, 67, 80, 81, 82: return 4 // rain
+            case 71, 73, 75, 77, 85, 86: return 5 // snow
+            case 95, 96, 99: return 6    // storm
+            default: return 7
+            }
+        }
+        var bucketCounts: [Int: Int] = [:]
+        for s in samples { bucketCounts[bucket(s.code), default: 0] += 1 }
+        let topBucketCount = bucketCounts.values.max() ?? 0
+        let topBucket = bucketCounts.filter { $0.value == topBucketCount }.map(\.key).min() ?? 0
+
+        // Within the modal bucket, pick the most-common code; tiebreak by lower (sunnier).
+        var codeCounts: [Int: Int] = [:]
+        for s in samples where bucket(s.code) == topBucket { codeCounts[s.code, default: 0] += 1 }
+        let topCodeCount = codeCounts.values.max() ?? 0
+        let mode = codeCounts.filter { $0.value == topCodeCount }.map(\.key).sorted().first ?? samples[0].code
+
         let avgHigh = samples.map(\.high).reduce(0, +) / Double(samples.count)
         let avgLow = samples.map(\.low).reduce(0, +) / Double(samples.count)
         return WeatherSummary(highC: avgHigh, lowC: avgLow, code: mode, isHistorical: true)
     }
 
-    private func fetchRaw(urlString: String) async -> (code: Int, high: Double, low: Double)? {
-        guard let url = URL(string: urlString) else { return nil }
+    private func fetchDerivedSeries(urlString: String) async -> [(code: Int, high: Double, low: Double)] {
+        guard let url = URL(string: urlString) else { return [] }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let daily = json["daily"] as? [String: Any],
                   let highs = daily["temperature_2m_max"] as? [Double],
                   let lows = daily["temperature_2m_min"] as? [Double],
-                  let codes = daily["weathercode"] as? [Int],
-                  let high = highs.first, let low = lows.first, let code = codes.first
-            else { return nil }
-            return (code, high, low)
+                  let clouds = daily["cloud_cover_mean"] as? [Double?],
+                  let precip = daily["precipitation_sum"] as? [Double?]
+            else { return [] }
+            let n = min(min(highs.count, lows.count), min(clouds.count, precip.count))
+            return (0..<n).map { i in
+                (Self.derivedCode(cloudCover: clouds[i], precipitation: precip[i]), highs[i], lows[i])
+            }
         } catch {
-            return nil
+            return []
         }
+    }
+
+    private static func derivedCode(cloudCover: Double?, precipitation: Double?) -> Int {
+        let p = precipitation ?? 0
+        if p >= 5 { return 63 }    // moderate rain
+        if p >= 1 { return 53 }    // drizzle
+        let cc = cloudCover ?? 50
+        if cc < 30 { return 0 }    // clear
+        if cc < 70 { return 2 }    // partly cloudy
+        return 3                   // overcast
     }
 
     private func fetch(urlString: String, isHistorical: Bool) async -> WeatherSummary? {
