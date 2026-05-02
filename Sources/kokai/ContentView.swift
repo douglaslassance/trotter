@@ -1435,13 +1435,15 @@ private struct TransitBadge: View {
     }
 
     private func circleMarker(size: CGFloat, iconSize: CGFloat) -> some View {
-        Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
+        let radius = size * 0.28
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
             .font(.system(size: iconSize, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(width: size, height: size)
-            .background(Circle().fill(.regularMaterial))
-            .overlay(Circle().stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
-            .contentShape(Circle())
+            .background(shape.fill(.regularMaterial))
+            .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
+            .contentShape(shape)
             .shadow(radius: 2, y: 1)
     }
 
