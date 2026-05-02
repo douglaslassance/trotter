@@ -623,10 +623,13 @@ private struct DayLegend: View {
             .frame(width: 220, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .background {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(.regularMaterial)
+                    .shadow(radius: 4, y: 2)
+            }
             .overlay(RoundedRectangle(cornerRadius: 10)
                 .stroke(AnyShapeStyle(.separator), lineWidth: 0.5))
-            .shadow(radius: 4, y: 2)
         }
     }
 
