@@ -792,7 +792,6 @@ private struct MapLevelView: View {
                 case (.small, false): return 15
                 }
             }()
-            let isPOI = feature.days.isEmpty
             Annotation("", coordinate: point.coordinate, anchor: .center) {
                 ZStack {
                     PlaceMarker(kind: feature.kind,
@@ -810,7 +809,6 @@ private struct MapLevelView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .opacity(isPOI ? 0.55 : 1)
                 .frame(width: markerSize, height: markerSize)
                 .popover(isPresented: popoverBinding(for: feature.id),
                          arrowEdge: .top) {
@@ -1196,6 +1194,15 @@ private struct DayTimeline: View {
         days.last.flatMap { document.date(forDay: $0) }
     }
 
+    private static let maxWeatherMarkers = 5
+
+    private var displayedWeatherDays: Set<Int> {
+        guard days.count > Self.maxWeatherMarkers else { return Set(days) }
+        let step = Double(days.count - 1) / Double(Self.maxWeatherMarkers - 1)
+        let indices = (0..<Self.maxWeatherMarkers).map { Int(round(Double($0) * step)) }
+        return Set(indices.compactMap { $0 < days.count ? days[$0] : nil })
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if startTime != nil || startDate != nil {
@@ -1225,7 +1232,7 @@ private struct DayTimeline: View {
                     HStack(spacing: 0) {
                         ForEach(days, id: \.self) { day in
                             ZStack {
-                                if let summary = weatherByDay[day] {
+                                if displayedWeatherDays.contains(day), let summary = weatherByDay[day] {
                                     Circle()
                                         .fill(.white)
                                         .frame(width: 20, height: 20)
