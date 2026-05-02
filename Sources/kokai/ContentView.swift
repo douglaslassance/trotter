@@ -351,11 +351,16 @@ struct ContentView: View {
     @Bindable var nav: NavigationModel
     @State private var selectionID: UUID?
     @State private var visibleDays: [Int] = []
+    @State private var visibleFeatureIDs: Set<UUID> = []
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             if let level = nav.current {
-                MapLevelView(level: level, nav: nav, selection: $selectionID, visibleDays: $visibleDays)
+                MapLevelView(level: level,
+                             nav: nav,
+                             selection: $selectionID,
+                             visibleDays: $visibleDays,
+                             visibleFeatureIDs: $visibleFeatureIDs)
                     .id(level.id)
             } else {
                 EmptyState()
@@ -363,7 +368,9 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 BreadcrumbBar(nav: nav)
                 if let level = nav.current {
-                    TripInfoBar(document: level.document)
+                    TripInfoBar(document: level.document,
+                                visibleDays: visibleDays,
+                                visibleFeatureIDs: visibleFeatureIDs)
                     DayLegend(document: level.document, days: visibleDays)
                 }
             }
@@ -372,21 +379,39 @@ struct ContentView: View {
         .onChange(of: nav.current?.id) {
             selectionID = nil
             visibleDays = []
+            visibleFeatureIDs = []
         }
     }
 }
 
 private struct TripInfoBar: View {
     let document: KMLDocument
+    let visibleDays: [Int]
+    let visibleFeatureIDs: Set<UUID>
+
+    private var visibleDaySet: Set<Int> { Set(visibleDays) }
 
     private var span: (first: Int, last: Int)? {
-        let days = document.features.flatMap(\.days)
-        guard let first = days.min(), let last = days.max() else { return nil }
+        guard let first = visibleDays.min(), let last = visibleDays.max() else { return nil }
         return (first, last)
     }
 
-    private var numDays: Int? { span.map { $0.last - $0.first + 1 } }
-    private var numNights: Int? { numDays.map { max(0, $0 - 1) } }
+    private var numDays: Int? {
+        let count = visibleDays.count
+        return count > 0 ? count : nil
+    }
+
+    private var numNights: Int? {
+        let total = document.features.reduce(0) { acc, feature in
+            guard feature.nights > 0,
+                  visibleFeatureIDs.contains(feature.id),
+                  !feature.days.isEmpty,
+                  Set(feature.days).isSubset(of: visibleDaySet)
+            else { return acc }
+            return acc + feature.nights
+        }
+        return total > 0 ? total : nil
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -436,6 +461,11 @@ private struct DayLegend: View {
     let days: [Int]
     @State private var weatherByDay: [Int: WeatherSummary] = [:]
 
+    private struct WeekRow: Identifiable {
+        let id = UUID()
+        let cells: [Int?]   // 7 entries, nil = empty placeholder
+    }
+
     private func coordinate(for day: Int) -> CLLocationCoordinate2D? {
         for feature in document.features where feature.days.contains(day) {
             if let coord = feature.coordinates.first { return coord }
@@ -443,31 +473,87 @@ private struct DayLegend: View {
         return nil
     }
 
+    // Monday = 0, Sunday = 6
+    private func mondayIndex(of date: Date) -> Int {
+        let cal = Calendar(identifier: .gregorian)
+        let weekday = cal.component(.weekday, from: date) // 1=Sun..7=Sat
+        return (weekday + 5) % 7
+    }
+
+    private var rows: [WeekRow] {
+        guard let firstDay = days.first,
+              let firstDate = document.date(forDay: firstDay) else { return [] }
+        let leading = mondayIndex(of: firstDate)
+        var cells: [Int?] = Array(repeating: nil, count: leading)
+        for day in days { cells.append(day) }
+        while cells.count % 7 != 0 { cells.append(nil) }
+        return stride(from: 0, to: cells.count, by: 7).map { start in
+            WeekRow(cells: Array(cells[start..<start + 7]))
+        }
+    }
+
+    private struct WeatherTally: Identifiable {
+        var id: String { label }
+        let icon: String
+        let label: String
+        var count: Int
+    }
+
+    private var weatherCounts: [WeatherTally] {
+        var sun = 0, partly = 0, cloudy = 0, fog = 0, rain = 0, drizzle = 0, snow = 0, storm = 0
+        for day in days {
+            guard let summary = weatherByDay[day] else { continue }
+            switch summary.code {
+            case 0, 1: sun += 1
+            case 2: partly += 1
+            case 3: cloudy += 1
+            case 45, 48: fog += 1
+            case 51, 53, 55, 56, 57: drizzle += 1
+            case 61, 63, 65, 66, 67, 80, 81, 82: rain += 1
+            case 71, 73, 75, 77, 85, 86: snow += 1
+            case 95, 96, 99: storm += 1
+            default: break
+            }
+        }
+        let entries: [WeatherTally] = [
+            .init(icon: "sun.max.fill", label: "Sunny", count: sun),
+            .init(icon: "cloud.sun.fill", label: "Partly cloudy", count: partly),
+            .init(icon: "cloud.fill", label: "Cloudy", count: cloudy),
+            .init(icon: "cloud.fog.fill", label: "Foggy", count: fog),
+            .init(icon: "cloud.drizzle.fill", label: "Drizzle", count: drizzle),
+            .init(icon: "cloud.rain.fill", label: "Rainy", count: rain),
+            .init(icon: "cloud.snow.fill", label: "Snow", count: snow),
+            .init(icon: "cloud.bolt.rain.fill", label: "Storm", count: storm),
+        ]
+        return entries.filter { $0.count > 0 }
+    }
+
     var body: some View {
         if !days.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(days, id: \.self) { day in
-                    HStack(spacing: 6) {
-                        if let summary = weatherByDay[day] {
-                            Image(systemName: weatherIcon(for: summary.code))
-                                .font(.system(size: 11, weight: .semibold))
-                                .symbolRenderingMode(.monochrome)
-                                .foregroundStyle(color(forDay: day))
-                                .frame(width: 14)
-                                .help(weatherTooltip(for: summary))
-                        } else {
-                            Circle()
-                                .fill(color(forDay: day))
-                                .frame(width: 10, height: 10)
-                                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: 4) {
+                    ForEach(rows) { row in
+                        HStack(spacing: 4) {
+                            ForEach(Array(row.cells.enumerated()), id: \.offset) { _, day in
+                                cell(for: day)
+                            }
                         }
-                        if let date = document.date(forDay: day) {
-                            Text(formatDate(date))
-                                .font(.caption.bold())
-                                .monospacedDigit()
-                        } else {
-                            Text("Day \(day)")
-                                .font(.caption.bold())
+                    }
+                }
+                if !weatherCounts.isEmpty {
+                    Divider()
+                    HStack(spacing: 10) {
+                        ForEach(weatherCounts) { entry in
+                            HStack(spacing: 3) {
+                                Image(systemName: entry.icon)
+                                    .symbolRenderingMode(.monochrome)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                Text("\(entry.count)")
+                                    .font(.caption.bold())
+                                    .monospacedDigit()
+                            }
+                            .help(entry.label)
                         }
                     }
                 }
@@ -479,6 +565,39 @@ private struct DayLegend: View {
             .overlay(RoundedRectangle(cornerRadius: 10)
                 .stroke(AnyShapeStyle(.separator), lineWidth: 0.5))
             .shadow(radius: 4, y: 2)
+        }
+    }
+
+    @ViewBuilder
+    private func cell(for day: Int?) -> some View {
+        if let day {
+            VStack(spacing: 1) {
+                ZStack {
+                    Circle()
+                        .fill(color(forDay: day).opacity(0.18))
+                        .frame(width: 22, height: 22)
+                    if let summary = weatherByDay[day] {
+                        Image(systemName: weatherIcon(for: summary.code))
+                            .symbolRenderingMode(.monochrome)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(color(forDay: day))
+                            .help(weatherTooltip(for: summary))
+                    } else {
+                        Circle()
+                            .fill(color(forDay: day))
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                if let date = document.date(forDay: day) {
+                    Text("\(Calendar.current.component(.day, from: date))")
+                        .font(.system(size: 9, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 24)
+        } else {
+            Color.clear.frame(width: 24, height: 32)
         }
     }
 
@@ -569,17 +688,20 @@ private struct MapLevelView: View {
     @Bindable var nav: NavigationModel
     @Binding var selection: UUID?
     @Binding var visibleDays: [Int]
+    @Binding var visibleFeatureIDs: Set<UUID>
     @State private var position: MapCameraPosition
     @State private var latitudeSpan: Double = 0
 
     init(level: NavigationModel.Level,
          nav: NavigationModel,
          selection: Binding<UUID?>,
-         visibleDays: Binding<[Int]>) {
+         visibleDays: Binding<[Int]>,
+         visibleFeatureIDs: Binding<Set<UUID>>) {
         self.level = level
         self.nav = nav
         self._selection = selection
         self._visibleDays = visibleDays
+        self._visibleFeatureIDs = visibleFeatureIDs
         if let saved = nav.region(for: level.id) {
             _position = State(initialValue: .region(saved))
         } else {
@@ -621,17 +743,22 @@ private struct MapLevelView: View {
         let maxLat = region.center.latitude + region.span.latitudeDelta / 2
         let minLon = region.center.longitude - region.span.longitudeDelta / 2
         let maxLon = region.center.longitude + region.span.longitudeDelta / 2
-        var seen = Set<Int>()
+        var seenDays = Set<Int>()
+        var seenFeatures = Set<UUID>()
         for feature in level.document.features where !feature.days.isEmpty {
             let coords = feature.coordinates
             let inside = coords.contains { c in
                 c.latitude >= minLat && c.latitude <= maxLat &&
                 c.longitude >= minLon && c.longitude <= maxLon
             }
-            if inside { seen.formUnion(feature.days) }
+            if inside {
+                seenDays.formUnion(feature.days)
+                seenFeatures.insert(feature.id)
+            }
         }
-        let sorted = seen.sorted()
+        let sorted = seenDays.sorted()
         if sorted != visibleDays { visibleDays = sorted }
+        if seenFeatures != visibleFeatureIDs { visibleFeatureIDs = seenFeatures }
     }
 
     @MapContentBuilder
