@@ -1162,6 +1162,18 @@ private struct PlaceMarker: View {
     }
 }
 
+private struct UnverifiedTicketBadge: View {
+    var body: some View {
+        Image(systemName: "ticket.fill")
+            .font(.system(size: 9, weight: .heavy))
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(.white)
+            .padding(3)
+            .background(Circle().fill(Color.yellow))
+            .help("Transit not verified")
+    }
+}
+
 private struct BadWeatherBadge: View {
     var body: some View {
         Image(systemName: "cloud.bolt.rain.fill")
@@ -1387,12 +1399,20 @@ private struct TransitBadge: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.primary)
                         .overlay(alignment: .topTrailing) {
-                            if let dot = validationDotColor {
+                            switch validation {
+                            case .validated:
                                 Circle()
-                                    .fill(dot)
+                                    .fill(Color.green)
                                     .frame(width: 7, height: 7)
                                     .overlay(Circle().stroke(Color.white, lineWidth: 1))
                                     .offset(x: 3, y: -3)
+                                    .allowsHitTesting(false)
+                            case .notFound, .failed:
+                                UnverifiedTicketBadge()
+                                    .offset(x: 6, y: -6)
+                                    .allowsHitTesting(false)
+                            case .none:
+                                EmptyView()
                             }
                         }
                 }
