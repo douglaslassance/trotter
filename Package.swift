@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "kokai",
+    name: "trotter",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "kokai",
-            path: "Sources/kokai"
+            name: "trotter",
+            path: "Sources/trotter"
         )
     ]
 )

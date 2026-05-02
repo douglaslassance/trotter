@@ -2049,7 +2049,7 @@ private actor WikipediaImageResolver {
             return nil
         }
         var request = URLRequest(url: endpoint)
-        request.setValue("kokai/1.0 (local development)", forHTTPHeaderField: "User-Agent")
+        request.setValue("trotter/1.0 (local development)", forHTTPHeaderField: "User-Agent")
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -2079,7 +2079,7 @@ private actor WikipediaImageResolver {
         ]
         guard let endpoint = components?.url else { return [] }
         var request = URLRequest(url: endpoint)
-        request.setValue("kokai/1.0 (local development)", forHTTPHeaderField: "User-Agent")
+        request.setValue("trotter/1.0 (local development)", forHTTPHeaderField: "User-Agent")
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -2419,7 +2419,7 @@ private enum ImageChoiceStore {
     }
 
     private static func defaultsKey(_ key: String) -> String {
-        "kokai.image.choice.\(key)"
+        "trotter.image.choice.\(key)"
     }
 }
 
@@ -2430,7 +2430,7 @@ private actor DiskImageCache {
     init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        directory = caches.appendingPathComponent("kokai/images", isDirectory: true)
+        directory = caches.appendingPathComponent("trotter/images", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 

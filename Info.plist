@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Kokai</string>
+	<string>Trotter</string>
 	<key>CFBundleExecutable</key>
-	<string>kokai</string>
+	<string>trotter</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.douglaslassance.kokai</string>
+	<string>com.douglaslassance.trotter</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>kokai</string>
+	<string>trotter</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

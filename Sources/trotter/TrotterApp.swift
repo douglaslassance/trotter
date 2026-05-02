@@ -19,7 +19,7 @@ final class LocationAuthorizer: NSObject, CLLocationManagerDelegate {
 }
 
 @main
-struct KokaiApp: App {
+struct TrotterApp: App {
     @State private var nav = NavigationModel()
     @State private var showingOpenPanel = false
     @State private var loadError: String?

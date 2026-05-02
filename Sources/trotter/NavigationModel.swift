@@ -16,7 +16,7 @@ final class NavigationModel {
         static func == (lhs: Level, rhs: Level) -> Bool { lhs.id == rhs.id }
     }
 
-    private static let recentsKey = "kokai.recentURLs"
+    private static let recentsKey = "trotter.recentURLs"
     private static let recentsLimit = 10
 
     private(set) var stack: [Level] = []

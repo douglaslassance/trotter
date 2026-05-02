@@ -1,4 +1,4 @@
-APP_NAME = kokai
+APP_NAME = trotter
 BUNDLE = $(APP_NAME).app
 CONFIG ?= release
 BUILD_DIR = .build/$(CONFIG)
@@ -17,7 +17,7 @@ bundle: build
 	mkdir -p $(BUNDLE)/Contents/Resources
 	cp $(BIN) $(BUNDLE)/Contents/MacOS/$(APP_NAME)
 	cp Info.plist $(BUNDLE)/Contents/Info.plist
-	codesign --force --sign - --entitlements kokai.entitlements $(BUNDLE) 2>/dev/null || codesign --force --sign - $(BUNDLE)
+	codesign --force --sign - --entitlements trotter.entitlements $(BUNDLE) 2>/dev/null || codesign --force --sign - $(BUNDLE)
 
 run: bundle
 	open $(BUNDLE)
