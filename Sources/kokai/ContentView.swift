@@ -1893,7 +1893,7 @@ private struct TicketStatusBadge: View {
     private var label: String {
         switch result {
         case .validated: return "Verified"
-        default: return "Unverified"
+        default: return "Unknown"
         }
     }
 
