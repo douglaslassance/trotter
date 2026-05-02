@@ -1793,12 +1793,12 @@ private struct TransitPopover: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(feature.name ?? "Transit")
                                 .font(.title3.weight(.semibold))
-                            ValidationLabel(result: validation)
                         }
                         Spacer(minLength: 0)
                         if let duration = validatedDuration ?? feature.duration {
                             DurationBadge(duration: duration)
                         }
+                        TicketStatusBadge(result: validation)
                     }
                     if !feature.days.isEmpty {
                         DayTimeline(days: feature.days,
@@ -1854,6 +1854,39 @@ private struct TransitPopover: View {
             departureDate: fullDate,
             vehicle: feature.vehicle)
         await MainActor.run { validation = result }
+    }
+}
+
+private struct TicketStatusBadge: View {
+    let result: TransitValidator.Result?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "ticket.fill")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+            Text(label)
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(background, in: Capsule())
+        .help(label)
+    }
+
+    private var label: String {
+        switch result {
+        case .validated: return "Verified"
+        default: return "Unverified"
+        }
+    }
+
+    private var background: Color {
+        switch result {
+        case .validated: return .green
+        default: return .yellow
+        }
     }
 }
 
