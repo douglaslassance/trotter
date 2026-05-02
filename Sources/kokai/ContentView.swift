@@ -551,7 +551,9 @@ private struct DayLegend: View {
                     }
                 }
                 if !weatherCounts.isEmpty {
-                    Divider()
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.18))
+                        .frame(height: 1)
                     HStack(spacing: 10) {
                         ForEach(weatherCounts) { entry in
                             HStack(spacing: 3) {
