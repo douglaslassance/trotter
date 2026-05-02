@@ -1418,8 +1418,7 @@ private struct TransitBadge: View {
     private var validationDotColor: Color? {
         switch validation {
         case .validated: return .green
-        case .notFound, .failed: return .yellow
-        case .none: return nil
+        case .notFound, .failed, .none: return nil
         }
     }
 
@@ -1840,14 +1839,7 @@ private struct ValidationLabel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        case .notFound, .failed:
-            HStack(spacing: 4) {
-                Circle().fill(Color.yellow).frame(width: 6, height: 6)
-                Text("Unverified")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        case .none:
+        case .notFound, .failed, .none:
             EmptyView()
         }
     }
