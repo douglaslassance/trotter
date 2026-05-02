@@ -1204,7 +1204,7 @@ private struct BadWeatherBadge: View {
             .symbolRenderingMode(.monochrome)
             .foregroundStyle(.white)
             .padding(4)
-            .background(Circle().fill(Color.yellow))
+            .background(Circle().fill(Color(red: 0.94, green: 0.36, blue: 0.48)))
             .shadow(radius: 1.5, y: 0.5)
             .help("Bad weather expected")
     }
@@ -1399,12 +1399,12 @@ private struct TransitBadge: View {
     }
 
     private var iconOnlyBody: some View {
-        circleMarker(size: 31, iconSize: 15)
+        markerBody(width: 31, height: 31, iconSize: 15, showDuration: false)
     }
 
     private var fullBody: some View {
         VStack(spacing: 2) {
-            circleMarker(size: 46, iconSize: 22)
+            markerBody(width: 46, height: 50, iconSize: 22, showDuration: true)
                 .overlay(alignment: .topLeading) {
                     switch validation {
                     case .validated:
@@ -1422,12 +1422,6 @@ private struct TransitBadge: View {
                         EmptyView()
                     }
                 }
-                .overlay(alignment: .topTrailing) {
-                    if let duration = feature.duration {
-                        DurationMiniBadge(text: duration)
-                            .offset(x: 6, y: -4)
-                    }
-                }
             if let name = feature.name, !name.isEmpty {
                 PlaceLabel(text: name, isDrillable: false)
                     .fixedSize()
@@ -1436,17 +1430,25 @@ private struct TransitBadge: View {
         }
     }
 
-    private func circleMarker(size: CGFloat, iconSize: CGFloat) -> some View {
-        let radius = size * 0.28
+    private func markerBody(width: CGFloat, height: CGFloat, iconSize: CGFloat, showDuration: Bool) -> some View {
+        let radius = min(width, height) * 0.28
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
-            .font(.system(size: iconSize, weight: .semibold))
-            .foregroundStyle(.primary)
-            .frame(width: size, height: size)
-            .background(shape.fill(.regularMaterial))
-            .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
-            .contentShape(shape)
-            .shadow(radius: 2, y: 1)
+        return VStack(spacing: 1) {
+            Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundStyle(.primary)
+            if showDuration, let duration = feature.duration {
+                Text(duration)
+                    .font(.system(size: 9, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: width, height: height)
+        .background(shape.fill(.regularMaterial))
+        .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
+        .contentShape(shape)
+        .shadow(radius: 2, y: 1)
     }
 
     private var validationDotColor: Color? {
