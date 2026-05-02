@@ -758,6 +758,7 @@ private struct MapLevelView: View {
     @Binding var visibleFeatureIDs: Set<UUID>
     @State private var position: MapCameraPosition
     @State private var latitudeSpan: Double = 0
+    @State private var routePaths: [UUID: [CLLocationCoordinate2D]] = [:]
 
     init(level: NavigationModel.Level,
          nav: NavigationModel,
@@ -796,11 +797,28 @@ private struct MapLevelView: View {
             updateVisibleDays(region: ctx.region)
             nav.saveRegion(ctx.region, for: level.id)
         }
+        .task { await loadRoutePaths() }
         .onChange(of: nav.fitTrigger) { _, _ in
             if let rect = Self.boundingRect(for: level.document.features) {
                 withAnimation(.easeInOut(duration: 0.4)) {
                     position = .rect(rect)
                 }
+            }
+        }
+    }
+
+    private func loadRoutePaths() async {
+        for feature in level.document.features {
+            guard case .lineString(let line) = feature,
+                  line.coordinates.count == 2,
+                  routePaths[feature.id] == nil else { continue }
+            if let path = await RoutePathResolver.shared.path(
+                from: line.coordinates[0],
+                to: line.coordinates[1],
+                vehicle: feature.vehicle
+            ) {
+                let id = feature.id
+                await MainActor.run { routePaths[id] = path }
             }
         }
     }
@@ -904,9 +922,17 @@ private struct MapLevelView: View {
     @MapContentBuilder
     private func transitContent(feature: KMLFeature,
                                 line: KMLFeature.LineString) -> some MapContent {
-        MapPolyline(coordinates: curvedPath(line.coordinates))
+        let realPath = routePaths[feature.id]
+        let coords = realPath ?? curvedPath(line.coordinates)
+        let markerCoord: CLLocationCoordinate2D? = {
+            if let realPath, !realPath.isEmpty {
+                return realPath[realPath.count / 2]
+            }
+            return curvedApex(of: line.coordinates)
+        }()
+        MapPolyline(coordinates: coords)
             .stroke(dayShapeHorizontal(feature.days, anchors: level.document.dayAnchors), lineWidth: 3)
-        if let mid = curvedApex(of: line.coordinates) {
+        if let mid = markerCoord {
             Annotation("", coordinate: mid, anchor: .center) {
                 TransitBadge(feature: feature,
                              document: level.document,
@@ -2013,6 +2039,54 @@ private actor WikipediaImageResolver {
             }
         } catch {
             return []
+        }
+    }
+}
+
+private func naturalTransportType(for vehicle: String?) -> MKDirectionsTransportType? {
+    switch vehicle?.lowercased() {
+    case "car", "rental_car", "drive": return .automobile
+    case "walk", "foot": return .walking
+    case "bicycle", "bike": return .walking
+    case "ferry", "boat", "ship", "plane", "flight": return nil
+    default: return .transit
+    }
+}
+
+private actor RoutePathResolver {
+    static let shared = RoutePathResolver()
+    private var cache: [String: [CLLocationCoordinate2D]] = [:]
+
+    private static func key(start: CLLocationCoordinate2D, end: CLLocationCoordinate2D, vehicle: String?) -> String {
+        String(format: "%.4f,%.4f|%.4f,%.4f|%@",
+               start.latitude, start.longitude,
+               end.latitude, end.longitude,
+               vehicle ?? "")
+    }
+
+    func path(from start: CLLocationCoordinate2D,
+              to end: CLLocationCoordinate2D,
+              vehicle: String?) async -> [CLLocationCoordinate2D]? {
+        let key = Self.key(start: start, end: end, vehicle: vehicle)
+        if let cached = cache[key] { return cached }
+        guard let type = naturalTransportType(for: vehicle) else { return nil }
+
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
+        request.transportType = type
+
+        do {
+            let response = try await MKDirections(request: request).calculate()
+            guard let route = response.routes.first else { return nil }
+            let count = route.polyline.pointCount
+            guard count > 1 else { return nil }
+            var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: count)
+            route.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: count))
+            cache[key] = coords
+            return coords
+        } catch {
+            return nil
         }
     }
 }
