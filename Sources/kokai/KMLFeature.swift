@@ -63,10 +63,8 @@ enum KMLFeature: Identifiable {
     }
 
     var duration: String? {
-        if let mins = durationMinutes {
-            return KMLFeature.formatDuration(minutes: mins)
-        }
-        return attributes["duration"]
+        guard let mins = durationMinutes else { return nil }
+        return KMLFeature.formatDuration(minutes: mins)
     }
 
     private static func minutesSinceMidnight(_ time: String) -> Int? {

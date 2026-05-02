@@ -108,10 +108,6 @@ private func googleMapsURL(coord: CLLocationCoordinate2D, name: String?) -> URL?
 }
 
 private func bookingURL(for feature: KMLFeature, country: String?) -> URL? {
-    if let explicit = feature.attributes["booking_url"], !explicit.isEmpty,
-       let url = URL(string: explicit) {
-        return url
-    }
     let name = feature.name ?? ""
     var parts: [String] = []
     if !name.isEmpty { parts.append(name) }
@@ -1600,7 +1596,7 @@ private struct PlacePopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
-                HeroImage(explicitURL: feature.attributes["image_url"],
+                HeroImage(explicitURL: nil,
                           wikipediaQuery: feature.name,
                           kind: feature.kind,
                           vehicle: nil,
@@ -1869,7 +1865,7 @@ private struct TransitPopover: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 0) {
-                HeroImage(explicitURL: feature.attributes["image_url"],
+                HeroImage(explicitURL: nil,
                           wikipediaQuery: feature.name,
                           kind: feature.kind,
                           vehicle: feature.vehicle,
