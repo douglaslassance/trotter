@@ -1353,7 +1353,7 @@ private struct DayTimeline: View {
                                 if displayedWeatherDays.contains(day), let summary = weatherByDay[day] {
                                     let bad = isBadWeather(code: summary.code)
                                     Circle()
-                                        .fill(bad ? AnyShapeStyle(badWeatherColor) : AnyShapeStyle(Color.white))
+                                        .fill(bad ? AnyShapeStyle(badWeatherColor) : AnyShapeStyle(.background))
                                         .frame(width: 24, height: 24)
                                         .overlay(Circle().stroke(.separator, lineWidth: 0.5))
                                         .shadow(radius: 2, y: 1)
