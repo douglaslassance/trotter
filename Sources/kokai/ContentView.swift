@@ -1444,18 +1444,11 @@ private struct TransitBadge: View {
         .shadow(radius: 2, y: 1)
         .overlay(alignment: .topLeading) {
             switch validation {
-            case .validated:
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 8, height: 8)
-                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                    .offset(x: -2, y: -2)
-                    .allowsHitTesting(false)
             case .notFound, .failed:
                 UnverifiedTicketBadge()
                     .offset(x: -6, y: -6)
                     .allowsHitTesting(false)
-            case .none:
+            case .validated, .none:
                 EmptyView()
             }
         }
