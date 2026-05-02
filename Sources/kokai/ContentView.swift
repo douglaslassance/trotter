@@ -1333,7 +1333,7 @@ private struct DayTimeline: View {
                                     Image(systemName: weatherIcon(for: summary.code))
                                         .font(.system(size: 12, weight: .semibold))
                                         .symbolRenderingMode(.monochrome)
-                                        .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+                                        .foregroundStyle(weatherIconStyle(for: summary))
                                         .help(weatherTooltip(for: summary))
                                 }
                             }
@@ -2036,26 +2036,36 @@ private actor TransitValidator {
         let key = "\(start.latitude),\(start.longitude)|\(end.latitude),\(end.longitude)|\(Int(departureDate.timeIntervalSince1970))"
         if let cached = cache[key] { return cached }
 
-        let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
-        request.transportType = transportType(for: vehicle)
-        request.departureDate = departureDate
+        // Try the natural transport type first; if Apple Maps has no data, fall back through
+        // automobile then walking so we still surface a known-feasible route as proof of concept.
+        let primary = transportType(for: vehicle)
+        let fallbacks: [MKDirectionsTransportType] = [.automobile, .walking]
+        var candidates = [primary]
+        for f in fallbacks where !candidates.contains(f) { candidates.append(f) }
 
-        do {
-            let response = try await MKDirections(request: request).calculate()
-            guard let route = response.routes.first else {
-                cache[key] = .notFound
-                return .notFound
+        var lastError: Result = .notFound
+        for type in candidates {
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
+            request.transportType = type
+            request.departureDate = departureDate
+
+            do {
+                let response = try await MKDirections(request: request).calculate()
+                if let route = response.routes.first {
+                    let arrival = departureDate.addingTimeInterval(route.expectedTravelTime)
+                    let result = Result.validated(arrival: arrival, expectedDuration: route.expectedTravelTime)
+                    cache[key] = result
+                    return result
+                }
+                lastError = .notFound
+            } catch {
+                lastError = .failed
             }
-            let arrival = departureDate.addingTimeInterval(route.expectedTravelTime)
-            let result = Result.validated(arrival: arrival, expectedDuration: route.expectedTravelTime)
-            cache[key] = result
-            return result
-        } catch {
-            cache[key] = .failed
-            return .failed
         }
+        cache[key] = lastError
+        return lastError
     }
 
     private func transportType(for vehicle: String?) -> MKDirectionsTransportType {
@@ -2106,6 +2116,15 @@ private func isBadWeather(code: Int) -> Bool {
     // Drizzle (51-57) or anything with precipitation (rain, snow, showers, thunder).
     // Excludes clear (0-3) and fog (45, 48).
     code >= 51
+}
+
+private let badWeatherColor = Color(red: 0.94, green: 0.36, blue: 0.48)
+
+private func weatherIconStyle(for summary: WeatherSummary) -> AnyShapeStyle {
+    if isBadWeather(code: summary.code) {
+        return AnyShapeStyle(badWeatherColor)
+    }
+    return summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange)
 }
 
 private func weatherIcon(for code: Int) -> String {
