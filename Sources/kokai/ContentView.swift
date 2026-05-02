@@ -1291,10 +1291,11 @@ private struct DayTimeline: View {
                                 if displayedWeatherDays.contains(day), let summary = weatherByDay[day] {
                                     Circle()
                                         .fill(.white)
-                                        .frame(width: 20, height: 20)
+                                        .frame(width: 24, height: 24)
                                         .overlay(Circle().stroke(.separator, lineWidth: 0.5))
+                                        .shadow(radius: 2, y: 1)
                                     Image(systemName: weatherIcon(for: summary.code))
-                                        .font(.system(size: 10, weight: .semibold))
+                                        .font(.system(size: 12, weight: .semibold))
                                         .symbolRenderingMode(.monochrome)
                                         .foregroundStyle(summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
                                         .help(weatherTooltip(for: summary))
