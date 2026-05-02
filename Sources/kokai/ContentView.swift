@@ -1162,6 +1162,28 @@ private struct PlaceMarker: View {
     }
 }
 
+private struct DurationMiniBadge: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "clock")
+                .font(.system(size: 8, weight: .bold))
+            Text(text)
+                .font(.system(size: 9, weight: .heavy))
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .fixedSize()
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(.white, in: Capsule())
+        .overlay(Capsule().strokeBorder(.separator, lineWidth: 0.5))
+        .allowsHitTesting(false)
+    }
+}
+
 private struct UnverifiedTicketBadge: View {
     var body: some View {
         Image(systemName: "ticket.fill")
@@ -1375,64 +1397,52 @@ private struct TransitBadge: View {
     }
 
     private var iconOnlyBody: some View {
-        ZStack {
-            Circle()
-                .fill(.regularMaterial)
-                .overlay(Circle().stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
-                .shadow(radius: 2, y: 1)
-            Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
-        }
-        .frame(width: 24, height: 24)
+        circleMarker(size: 24, iconSize: 12)
     }
 
     private var fullBody: some View {
-        ZStack {
-            Capsule()
-                .fill(.regularMaterial)
-                .overlay(Capsule().stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
-                .shadow(radius: 2, y: 1)
-            HStack(spacing: 6) {
-                if let icon = vehicleIcon(feature.vehicle) {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .overlay(alignment: .topTrailing) {
-                            switch validation {
-                            case .validated:
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 7, height: 7)
-                                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                                    .offset(x: 3, y: -3)
-                                    .allowsHitTesting(false)
-                            case .notFound, .failed:
-                                UnverifiedTicketBadge()
-                                    .offset(x: 6, y: -6)
-                                    .allowsHitTesting(false)
-                            case .none:
-                                EmptyView()
-                            }
-                        }
-                }
-                VStack(alignment: .leading, spacing: 0) {
-                    if let name = feature.name {
-                        Text(name)
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
+        VStack(spacing: 2) {
+            circleMarker(size: 34, iconSize: 16)
+                .overlay(alignment: .topLeading) {
+                    switch validation {
+                    case .validated:
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                            .offset(x: -2, y: -2)
+                            .allowsHitTesting(false)
+                    case .notFound, .failed:
+                        UnverifiedTicketBadge()
+                            .offset(x: -6, y: -6)
+                            .allowsHitTesting(false)
+                    case .none:
+                        EmptyView()
                     }
+                }
+                .overlay(alignment: .bottomTrailing) {
                     if let duration = feature.duration {
-                        Text(duration)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                        DurationMiniBadge(text: duration)
+                            .offset(x: 6, y: 4)
                     }
                 }
+            if let name = feature.name, !name.isEmpty {
+                PlaceLabel(text: name, isDrillable: false)
+                    .fixedSize()
+                    .allowsHitTesting(false)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
         }
+    }
+
+    private func circleMarker(size: CGFloat, iconSize: CGFloat) -> some View {
+        Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
+            .font(.system(size: iconSize, weight: .heavy))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Circle().fill(dayShape(feature.days, anchors: document.dayAnchors)))
+            .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+            .contentShape(Circle())
+            .shadow(radius: 2, y: 1)
     }
 
     private var validationDotColor: Color? {
