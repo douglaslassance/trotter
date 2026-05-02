@@ -1325,15 +1325,16 @@ private struct DayTimeline: View {
                         ForEach(days, id: \.self) { day in
                             ZStack {
                                 if displayedWeatherDays.contains(day), let summary = weatherByDay[day] {
+                                    let bad = isBadWeather(code: summary.code)
                                     Circle()
-                                        .fill(.white)
+                                        .fill(bad ? AnyShapeStyle(badWeatherColor) : AnyShapeStyle(Color.white))
                                         .frame(width: 24, height: 24)
                                         .overlay(Circle().stroke(.separator, lineWidth: 0.5))
                                         .shadow(radius: 2, y: 1)
                                     Image(systemName: weatherIcon(for: summary.code))
                                         .font(.system(size: 12, weight: .semibold))
                                         .symbolRenderingMode(.monochrome)
-                                        .foregroundStyle(weatherIconStyle(for: summary))
+                                        .foregroundStyle(bad ? AnyShapeStyle(Color.white) : (summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange)))
                                         .help(weatherTooltip(for: summary))
                                 }
                             }
