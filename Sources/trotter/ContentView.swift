@@ -642,6 +642,19 @@ private struct DayLegend: View {
                             .help(entry.label)
                         }
                     }
+                    if let range = temperatureRangeText {
+                        HStack(spacing: 3) {
+                            Image(systemName: "thermometer.medium")
+                                .symbolRenderingMode(.monochrome)
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            Text(range)
+                                .font(.caption.bold())
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        .help("Typical low - high across these days")
+                    }
                 }
             }
             .task(id: legendKey) { await loadWeather() }
@@ -695,6 +708,14 @@ private struct DayLegend: View {
 
     private var legendKey: String {
         days.map(String.init).joined(separator: ",")
+    }
+
+    private var temperatureRangeText: String? {
+        let summaries = days.compactMap { weatherByDay[$0] }
+        guard !summaries.isEmpty,
+              let minLow = summaries.map(\.lowC).min(),
+              let maxHigh = summaries.map(\.highC).max() else { return nil }
+        return "\(Int(minLow.rounded()))-\(Int(maxHigh.rounded())) °C"
     }
 
     private func loadWeather() async {
@@ -952,14 +973,14 @@ private struct MapLevelView: View {
             if detail == .full {
                 ForEach(arrivalBadges(for: feature), id: \.day) { badge in
                     Annotation("", coordinate: badge.coord, anchor: .center) {
-                        EntryExitBadge(time: badge.time)
+                        EntryExitBadge(time: badge.time, day: badge.day, anchors: level.document.dayAnchors)
                             .fixedSize()
                             .allowsHitTesting(false)
                     }
                 }
                 ForEach(departureBadges(for: feature), id: \.day) { badge in
                     Annotation("", coordinate: badge.coord, anchor: .center) {
-                        EntryExitBadge(time: badge.time)
+                        EntryExitBadge(time: badge.time, day: badge.day, anchors: level.document.dayAnchors)
                             .fixedSize()
                             .allowsHitTesting(false)
                     }
@@ -1026,9 +1047,13 @@ private struct MapLevelView: View {
                   let arrival = inbound.arrival else { continue }
             let from = line.coordinates[line.coordinates.count - 2]
             let to = line.coordinates[line.coordinates.count - 1]
-            let coord = bezierPoint(at: 0.85,
-                                    from: from, to: to,
-                                    perpOffset: curveOffset(from: from, to: to))
+            let base = bezierPoint(at: 0.85,
+                                   from: from, to: to,
+                                   perpOffset: curveOffset(from: from, to: to))
+            let shift = lateralShift(for: inbound, line: line)
+            let coord = abs(shift) > 0
+                ? translatePerpendicular(base, from: from, to: to, by: shift)
+                : base
             results.append(DayBadge(day: day, time: arrival, coord: coord))
         }
         return results
@@ -1044,9 +1069,13 @@ private struct MapLevelView: View {
                   let departure = outbound.departure else { continue }
             let from = line.coordinates[0]
             let to = line.coordinates[1]
-            let coord = bezierPoint(at: 0.15,
-                                    from: from, to: to,
-                                    perpOffset: curveOffset(from: from, to: to))
+            let base = bezierPoint(at: 0.15,
+                                   from: from, to: to,
+                                   perpOffset: curveOffset(from: from, to: to))
+            let shift = lateralShift(for: outbound, line: line)
+            let coord = abs(shift) > 0
+                ? translatePerpendicular(base, from: from, to: to, by: shift)
+                : base
             results.append(DayBadge(day: day, time: departure, coord: coord))
         }
         return results
@@ -1309,6 +1338,8 @@ private struct NightBadge: View {
 
 private struct EntryExitBadge: View {
     let time: String
+    let day: Int
+    let anchors: [Int]
 
     var body: some View {
         Text(time)
@@ -1317,7 +1348,7 @@ private struct EntryExitBadge: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().stroke(.separator.opacity(0.5), lineWidth: 0.5))
+            .overlay(Capsule().stroke(dayShapeHorizontal([day], anchors: anchors), lineWidth: 1.5))
     }
 }
 
@@ -1605,6 +1636,23 @@ private struct PlacePopover: View {
                           refreshTrigger: imageRefreshTrigger)
                     .frame(height: 160)
                     .clipped()
+                    .overlay(alignment: .topLeading) {
+                        if let range = temperatureRangeText {
+                            HStack(spacing: 3) {
+                                Image(systemName: "thermometer.medium")
+                                    .font(.caption.bold())
+                                Text(range)
+                                    .font(.caption.bold())
+                                    .monospacedDigit()
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.55), in: Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                            .padding(8)
+                        }
+                    }
                 ImageRefreshButton { imageRefreshTrigger += 1 }
                     .padding(8)
             }
@@ -1733,6 +1781,14 @@ private struct PlacePopover: View {
         }
         let url = bookingURL(for: feature, country: country)
         await MainActor.run { resolvedBookingURL = url }
+    }
+
+    private var temperatureRangeText: String? {
+        let summaries = feature.days.compactMap { weatherByDay[$0] }
+        guard !summaries.isEmpty,
+              let minLow = summaries.map(\.lowC).min(),
+              let maxHigh = summaries.map(\.highC).max() else { return nil }
+        return "\(Int(minLow.rounded()))-\(Int(maxHigh.rounded())) °C"
     }
 
     private func resolveWeather() async {
