@@ -820,6 +820,8 @@ private struct MapLevelView: View {
                 let id = feature.id
                 await MainActor.run { routePaths[id] = path }
             }
+            // Throttle to avoid Apple Maps' burst rate limit (~50 req/min).
+            try? await Task.sleep(nanoseconds: 800_000_000)
         }
     }
 
@@ -2072,11 +2074,10 @@ private actor RoutePathResolver {
         guard let primary = naturalTransportType(for: vehicle) else { return nil }
 
         // Try the natural transport type first; if Apple Maps has no data for it (which is
-        // common for inter-city rail), fall back through automobile then walking so we still
-        // surface a real-world geometry instead of a bezier guess.
+        // common for inter-city rail), fall back to automobile so we still surface a real-world
+        // geometry instead of a bezier guess. Skip walking since it's rarely useful here.
         var types: [MKDirectionsTransportType] = [primary]
-        for fallback in [MKDirectionsTransportType.automobile, .walking]
-            where !types.contains(fallback) { types.append(fallback) }
+        if primary != .automobile { types.append(.automobile) }
 
         for type in types {
             let request = MKDirections.Request()
