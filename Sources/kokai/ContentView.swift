@@ -1412,9 +1412,9 @@ private struct TransitBadge: View {
 
     private var fullBody: some View {
         let shape = Capsule()
-        return HStack(spacing: 8) {
+        return HStack(spacing: 6) {
             Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.primary)
             VStack(alignment: .leading, spacing: 0) {
                 if let name = feature.name, !name.isEmpty {
@@ -1435,8 +1435,8 @@ private struct TransitBadge: View {
             }
         }
         .fixedSize()
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(shape.fill(.regularMaterial))
         .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
         .contentShape(shape)
