@@ -204,26 +204,51 @@ private let dayPalette: [Color] = [
     Color(red: 0.40, green: 0.50, blue: 0.65), // Day 24 — slate blue
 ]
 
-private func color(forDay day: Int, totalDays: Int = dayPalette.count) -> Color {
-    guard day >= 1 else { return .gray }
-    let total = max(1, totalDays)
-    if total <= 1 {
-        return dayPalette[0]
-    }
-    let idx = (Double(day - 1) / Double(total - 1)) * Double(dayPalette.count - 1)
-    let clamped = max(0, min(dayPalette.count - 1, Int(idx.rounded())))
-    return dayPalette[clamped]
+private func paletteColor(_ index: Int) -> Color {
+    let count = dayPalette.count
+    return dayPalette[((index % count) + count) % count]
 }
 
-private func dayShape(_ days: [Int], totalDays: Int = dayPalette.count) -> AnyShapeStyle {
+private func blendColors(_ a: Color, _ b: Color, t: Double) -> Color {
+    let na = NSColor(a).usingColorSpace(.sRGB) ?? NSColor(a)
+    let nb = NSColor(b).usingColorSpace(.sRGB) ?? NSColor(b)
+    let clamped = max(0, min(1, t))
+    return Color(
+        red: na.redComponent + (nb.redComponent - na.redComponent) * clamped,
+        green: na.greenComponent + (nb.greenComponent - na.greenComponent) * clamped,
+        blue: na.blueComponent + (nb.blueComponent - na.blueComponent) * clamped
+    )
+}
+
+private func color(forDay day: Int, anchors: [Int]) -> Color {
+    guard !anchors.isEmpty else { return paletteColor(0) }
+    if day <= anchors.first! { return paletteColor(0) }
+    if day >= anchors.last! { return paletteColor(anchors.count - 1) }
+    for i in 0..<anchors.count - 1 {
+        let lo = anchors[i], hi = anchors[i + 1]
+        if day >= lo && day <= hi {
+            let span = max(1, hi - lo)
+            let t = Double(day - lo) / Double(span)
+            return blendColors(paletteColor(i), paletteColor(i + 1), t: t)
+        }
+    }
+    return paletteColor(0)
+}
+
+// Backward-compatible no-anchor variant (used where no document is available, e.g. HeroImage fallback).
+private func color(forDay day: Int) -> Color {
+    paletteColor(max(0, day - 1))
+}
+
+private func dayShape(_ days: [Int], anchors: [Int]) -> AnyShapeStyle {
     if days.isEmpty {
         return AnyShapeStyle(Color.gray)
     }
     if days.count == 1 {
-        return AnyShapeStyle(color(forDay: days[0], totalDays: totalDays))
+        return AnyShapeStyle(color(forDay: days[0], anchors: anchors))
     }
-    let first = color(forDay: days.first!, totalDays: totalDays)
-    let last = color(forDay: days.last!, totalDays: totalDays)
+    let first = color(forDay: days.first!, anchors: anchors)
+    let last = color(forDay: days.last!, anchors: anchors)
     return AnyShapeStyle(LinearGradient(
         colors: [first, last],
         startPoint: .top,
@@ -231,17 +256,31 @@ private func dayShape(_ days: [Int], totalDays: Int = dayPalette.count) -> AnySh
     ))
 }
 
-private func dayShapeHorizontal(_ days: [Int], totalDays: Int = dayPalette.count) -> AnyShapeStyle {
+private func dayShapeHorizontal(_ days: [Int], anchors: [Int]) -> AnyShapeStyle {
     if days.isEmpty {
         return AnyShapeStyle(Color.gray)
     }
     if days.count == 1 {
-        return AnyShapeStyle(color(forDay: days[0], totalDays: totalDays))
+        return AnyShapeStyle(color(forDay: days[0], anchors: anchors))
     }
-    let first = color(forDay: days.first!, totalDays: totalDays)
-    let last = color(forDay: days.last!, totalDays: totalDays)
+    let first = color(forDay: days.first!, anchors: anchors)
+    let last = color(forDay: days.last!, anchors: anchors)
     return AnyShapeStyle(LinearGradient(
         colors: [first, last],
+        startPoint: .leading,
+        endPoint: .trailing
+    ))
+}
+
+private func dayShapeHorizontalFallback(_ days: [Int]) -> AnyShapeStyle {
+    if days.isEmpty {
+        return AnyShapeStyle(Color.gray)
+    }
+    if days.count == 1 {
+        return AnyShapeStyle(color(forDay: days[0]))
+    }
+    return AnyShapeStyle(LinearGradient(
+        colors: [color(forDay: days.first!), color(forDay: days.last!)],
         startPoint: .leading,
         endPoint: .trailing
     ))
@@ -594,7 +633,7 @@ private struct DayLegend: View {
     @ViewBuilder
     private func cell(for day: Int?) -> some View {
         if let day {
-            let dayColor = color(forDay: day, totalDays: document.totalDays)
+            let dayColor = color(forDay: day, anchors: document.dayAnchors)
             VStack(spacing: 1) {
                 ZStack {
                     Circle()
@@ -864,7 +903,7 @@ private struct MapLevelView: View {
     private func transitContent(feature: KMLFeature,
                                 line: KMLFeature.LineString) -> some MapContent {
         MapPolyline(coordinates: curvedPath(line.coordinates))
-            .stroke(dayShapeHorizontal(feature.days, totalDays: level.document.totalDays), lineWidth: 3)
+            .stroke(dayShapeHorizontal(feature.days, anchors: level.document.dayAnchors), lineWidth: 3)
         if let mid = curvedApex(of: line.coordinates) {
             Annotation("", coordinate: mid, anchor: .center) {
                 TransitBadge(feature: feature,
@@ -1079,7 +1118,7 @@ private struct PlaceMarker: View {
             }
         }
             .frame(width: size, height: size)
-            .background(Circle().fill(dayShape(days, totalDays: document?.totalDays ?? dayPalette.count)))
+            .background(Circle().fill(dayShape(days, anchors: document?.dayAnchors ?? [])))
             .overlay(Circle().strokeBorder(.white, lineWidth: borderWidth))
             .overlay(alignment: .topTrailing) {
                 if nights > 0 && detail == .full {
@@ -1190,14 +1229,14 @@ private struct DayTimeline: View {
 
     private var gradientColors: [Color] {
         if days.isEmpty { return [.gray] }
-        let total = document.totalDays
+        let anchors = document.dayAnchors
         if days.count == 1 {
-            let c = color(forDay: days[0], totalDays: total)
+            let c = color(forDay: days[0], anchors: anchors)
             return [c, c]
         }
         return [
-            color(forDay: days.first!, totalDays: total),
-            color(forDay: days.last!, totalDays: total),
+            color(forDay: days.first!, anchors: anchors),
+            color(forDay: days.last!, anchors: anchors),
         ]
     }
 
@@ -1386,7 +1425,7 @@ private struct TransitBadge: View {
             return AnyShapeStyle(Color.accentColor)
         }
         if let day = feature.days.first {
-            return AnyShapeStyle(color(forDay: day, totalDays: document.totalDays).opacity(0.5))
+            return AnyShapeStyle(color(forDay: day, anchors: document.dayAnchors).opacity(0.5))
         }
         return AnyShapeStyle(.separator)
     }
@@ -1501,7 +1540,7 @@ private struct PlacePopover: View {
                     .font(.title3.weight(.heavy))
                     .foregroundStyle(.white)
                     .frame(width: 35, height: 35)
-                    .background(Circle().fill(dayShape(feature.days, totalDays: document.totalDays)))
+                    .background(Circle().fill(dayShape(feature.days, anchors: document.dayAnchors)))
                     .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(feature.name ?? "Untitled")
@@ -2335,7 +2374,7 @@ private struct HeroImage: View {
 
     private var fallback: some View {
         ZStack {
-            Rectangle().fill(dayShapeHorizontal(days.isEmpty ? [1] : days))
+            Rectangle().fill(dayShapeHorizontalFallback(days.isEmpty ? [1] : days))
             if let icon = vehicleIcon(vehicle) {
                 Image(systemName: icon)
                     .font(.system(size: 64, weight: .semibold))

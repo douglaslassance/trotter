@@ -39,6 +39,18 @@ struct KMLDocument {
 
     var totalDays: Int { lastDay }
 
+    /// Distinct boundary days across the trip (first and last day of every multi-day feature).
+    /// These act as palette anchor points: consecutive days inside a single stay share the
+    /// same surrounding anchor pair so they only consume one palette step total.
+    var dayAnchors: [Int] {
+        var set = Set<Int>()
+        for f in features where !f.days.isEmpty {
+            if let first = f.days.first { set.insert(first) }
+            if let last = f.days.last { set.insert(last) }
+        }
+        return set.sorted()
+    }
+
     var totalNights: Int {
         features.reduce(0) { $0 + $1.nights }
     }
