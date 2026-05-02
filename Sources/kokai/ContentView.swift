@@ -738,7 +738,7 @@ private enum BadgeDetail {
 
 private func badgeDetail(forSpan span: Double) -> BadgeDetail {
     if span > 6.0 { return .hidden }
-    if span > 3.0 { return .iconOnly }
+    if span > 1.2 { return .iconOnly }
     return .full
 }
 
