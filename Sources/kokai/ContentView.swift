@@ -859,7 +859,7 @@ private struct MapLevelView: View {
         guard count > 1 else { return 0 }
         // Shift each sibling by roughly the line stroke's worth of degrees.
         // Per-sibling step is small enough to look like parallel tracks at typical zoom.
-        let stepDegrees = 0.06
+        let stepDegrees = 0.005
         let centered = Double(index) - Double(count - 1) / 2.0
         return centered * stepDegrees
     }
