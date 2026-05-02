@@ -1873,10 +1873,10 @@ private struct TicketStatusBadge: View {
         HStack(spacing: 4) {
             Image(systemName: "ticket.fill")
                 .font(.caption.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(foreground)
             Text(label)
                 .font(.caption.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(foreground)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -1891,10 +1891,17 @@ private struct TicketStatusBadge: View {
         }
     }
 
-    private var background: Color {
+    private var foreground: AnyShapeStyle {
         switch result {
-        case .validated: return .green
-        default: return Color(red: 0.94, green: 0.36, blue: 0.48)
+        case .validated: return AnyShapeStyle(.secondary)
+        default: return AnyShapeStyle(Color.white)
+        }
+    }
+
+    private var background: AnyShapeStyle {
+        switch result {
+        case .validated: return AnyShapeStyle(Color.gray.opacity(0.15))
+        default: return AnyShapeStyle(Color(red: 0.94, green: 0.36, blue: 0.48))
         }
     }
 }
