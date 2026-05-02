@@ -1462,7 +1462,7 @@ private struct TransitBadge: View {
             .foregroundStyle(.primary)
             .frame(width: 36, height: 28)
             .background(shape.fill(.regularMaterial))
-            .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
+            .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 3 : 2))
             .contentShape(shape)
             .shadow(radius: 2, y: 1)
     }
@@ -1495,7 +1495,7 @@ private struct TransitBadge: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
         .background(shape.fill(.regularMaterial))
-        .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
+        .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 3 : 2))
         .contentShape(shape)
         .shadow(radius: 2, y: 1)
         .overlay(alignment: .topLeading) {
@@ -1521,8 +1521,8 @@ private struct TransitBadge: View {
         if isSelected {
             return AnyShapeStyle(Color.accentColor)
         }
-        if let day = feature.days.first {
-            return AnyShapeStyle(color(forDay: day, anchors: document.dayAnchors).opacity(0.5))
+        if !feature.days.isEmpty {
+            return dayShapeHorizontal(feature.days, anchors: document.dayAnchors)
         }
         return AnyShapeStyle(.separator)
     }
