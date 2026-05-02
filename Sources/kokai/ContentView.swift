@@ -877,7 +877,7 @@ private struct MapLevelView: View {
         let t: Double = {
             guard count > 1 else { return 0.5 }
             let centered = Double(index) - Double(count - 1) / 2.0
-            return max(0.2, min(0.8, 0.5 + centered * 0.18))
+            return max(0.2, min(0.8, 0.5 + centered * 0.4))
         }()
         let base = bezierPoint(
             at: t,
