@@ -872,8 +872,15 @@ private struct MapLevelView: View {
               let end = line.coordinates.last else {
             return curvedApex(of: line.coordinates)
         }
+        let (count, index) = siblingTransits(for: feature, line: line)
+        // Slide each sibling marker along the line so they don't pile up at the midpoint.
+        let t: Double = {
+            guard count > 1 else { return 0.5 }
+            let centered = Double(index) - Double(count - 1) / 2.0
+            return max(0.2, min(0.8, 0.5 + centered * 0.18))
+        }()
         let base = bezierPoint(
-            at: 0.5,
+            at: t,
             from: start,
             to: end,
             perpOffset: curveOffset(from: start, to: end)
