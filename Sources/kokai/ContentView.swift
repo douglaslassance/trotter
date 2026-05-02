@@ -1438,10 +1438,14 @@ private struct TransitBadge: View {
                 .font(.system(size: iconSize, weight: .semibold))
                 .foregroundStyle(.primary)
             if showDuration, let duration = feature.duration {
-                Text(duration)
-                    .font(.system(size: 9, weight: .heavy))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 2) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 8, weight: .bold))
+                    Text(duration)
+                        .font(.system(size: 9, weight: .heavy))
+                        .monospacedDigit()
+                }
+                .foregroundStyle(.secondary)
             }
         }
         .frame(width: width, height: height)
