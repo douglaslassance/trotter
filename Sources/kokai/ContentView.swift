@@ -1187,11 +1187,12 @@ private struct DurationMiniBadge: View {
 private struct UnverifiedTicketBadge: View {
     var body: some View {
         Image(systemName: "ticket.fill")
-            .font(.system(size: 9, weight: .heavy))
+            .font(.system(size: 10, weight: .heavy))
             .symbolRenderingMode(.monochrome)
             .foregroundStyle(.white)
-            .padding(3)
-            .background(Circle().fill(Color.yellow))
+            .padding(4)
+            .background(Circle().fill(Color(red: 0.94, green: 0.36, blue: 0.48)))
+            .shadow(radius: 1.5, y: 0.5)
             .help("Transit not verified")
     }
 }
@@ -1204,6 +1205,7 @@ private struct BadWeatherBadge: View {
             .foregroundStyle(.white)
             .padding(4)
             .background(Circle().fill(Color.yellow))
+            .shadow(radius: 1.5, y: 0.5)
             .help("Bad weather expected")
     }
 }
