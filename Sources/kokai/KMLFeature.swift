@@ -98,6 +98,13 @@ enum KMLFeature: Identifiable {
     }
     var hasOvernight: Bool { nights > 0 }
 
+    var isSuggested: Bool {
+        switch attributes["suggested"]?.lowercased() {
+        case "true", "1", "yes": return true
+        default: return false
+        }
+    }
+
     struct Point: Identifiable {
         let id = UUID()
         var name: String?

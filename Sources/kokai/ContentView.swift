@@ -859,6 +859,7 @@ private struct MapLevelView: View {
                             .allowsHitTesting(false)
                     }
                 }
+                .opacity(feature.isSuggested ? 0.5 : 1)
                 .frame(width: markerSize, height: markerSize)
                 .popover(isPresented: popoverBinding(for: feature.id),
                          arrowEdge: .top) {
