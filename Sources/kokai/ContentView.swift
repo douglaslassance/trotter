@@ -1397,12 +1397,12 @@ private struct TransitBadge: View {
     }
 
     private var iconOnlyBody: some View {
-        circleMarker(size: 24, iconSize: 12)
+        circleMarker(size: 28, iconSize: 14)
     }
 
     private var fullBody: some View {
         VStack(spacing: 2) {
-            circleMarker(size: 34, iconSize: 16)
+            circleMarker(size: 42, iconSize: 20)
                 .overlay(alignment: .topLeading) {
                     switch validation {
                     case .validated:
@@ -1420,10 +1420,10 @@ private struct TransitBadge: View {
                         EmptyView()
                     }
                 }
-                .overlay(alignment: .bottomTrailing) {
+                .overlay(alignment: .topTrailing) {
                     if let duration = feature.duration {
                         DurationMiniBadge(text: duration)
-                            .offset(x: 6, y: 4)
+                            .offset(x: 6, y: -4)
                     }
                 }
             if let name = feature.name, !name.isEmpty {
