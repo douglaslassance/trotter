@@ -559,6 +559,7 @@ private struct DayLegend: View {
                 }
             }
             .task(id: legendKey) { await loadWeather() }
+            .frame(width: 220, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
