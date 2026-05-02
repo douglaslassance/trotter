@@ -813,6 +813,49 @@ private struct MapLevelView: View {
         }
     }
 
+    private func siblingTransits(for feature: KMLFeature, line: KMLFeature.LineString) -> (count: Int, index: Int) {
+        guard let myStart = line.coordinates.first,
+              let myEnd = line.coordinates.last else { return (1, 0) }
+        let threshold = 0.001
+        func near(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Bool {
+            abs(a.latitude - b.latitude) < threshold && abs(a.longitude - b.longitude) < threshold
+        }
+        var siblings: [UUID] = []
+        for other in level.document.features {
+            guard case .lineString(let otherLine) = other,
+                  let s = otherLine.coordinates.first,
+                  let e = otherLine.coordinates.last else { continue }
+            let matches = (near(s, myStart) && near(e, myEnd)) || (near(s, myEnd) && near(e, myStart))
+            if matches { siblings.append(other.id) }
+        }
+        let index = siblings.firstIndex(of: feature.id) ?? 0
+        return (siblings.count, index)
+    }
+
+    private func offsetMarker(coord: CLLocationCoordinate2D,
+                              for feature: KMLFeature,
+                              line: KMLFeature.LineString) -> CLLocationCoordinate2D {
+        let (count, index) = siblingTransits(for: feature, line: line)
+        guard count > 1,
+              let start = line.coordinates.first,
+              let end = line.coordinates.last else { return coord }
+        let dLat = end.latitude - start.latitude
+        let dLon = end.longitude - start.longitude
+        let len = sqrt(dLat * dLat + dLon * dLon)
+        guard len > 0.0001 else { return coord }
+        var perpLat = dLon / len
+        var perpLon = -dLat / len
+        if perpLat < 0 { perpLat = -perpLat; perpLon = -perpLon }
+        let segmentLen = len
+        let spacing = segmentLen * 0.04
+        let centered = Double(index) - Double(count - 1) / 2.0
+        let amount = centered * spacing
+        return CLLocationCoordinate2D(
+            latitude: coord.latitude + perpLat * amount,
+            longitude: coord.longitude + perpLon * amount
+        )
+    }
+
     private func loadRoutePaths() async {
         for feature in level.document.features {
             guard case .lineString(let line) = feature,
@@ -932,12 +975,13 @@ private struct MapLevelView: View {
                                 line: KMLFeature.LineString) -> some MapContent {
         let realPath = routePaths[feature.id]
         let coords = realPath ?? curvedPath(line.coordinates)
-        let markerCoord: CLLocationCoordinate2D? = {
+        let baseMarkerCoord: CLLocationCoordinate2D? = {
             if let realPath, !realPath.isEmpty {
                 return realPath[realPath.count / 2]
             }
             return curvedApex(of: line.coordinates)
         }()
+        let markerCoord = baseMarkerCoord.map { offsetMarker(coord: $0, for: feature, line: line) }
         MapPolyline(coordinates: coords)
             .stroke(dayShapeHorizontal(feature.days, anchors: level.document.dayAnchors), lineWidth: 3)
         if let mid = markerCoord {
