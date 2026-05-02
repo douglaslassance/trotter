@@ -830,27 +830,21 @@ private struct MapLevelView: View {
         return (siblings.count, index)
     }
 
-    private func offsetMarker(coord: CLLocationCoordinate2D,
-                              for feature: KMLFeature,
-                              line: KMLFeature.LineString) -> CLLocationCoordinate2D {
-        let (count, index) = siblingTransits(for: feature, line: line)
-        guard count > 1,
+    private func markerPosition(for feature: KMLFeature,
+                                line: KMLFeature.LineString) -> CLLocationCoordinate2D? {
+        guard line.coordinates.count == 2,
               let start = line.coordinates.first,
-              let end = line.coordinates.last else { return coord }
-        let dLat = end.latitude - start.latitude
-        let dLon = end.longitude - start.longitude
-        let len = sqrt(dLat * dLat + dLon * dLon)
-        guard len > 0.0001 else { return coord }
-        var perpLat = dLon / len
-        var perpLon = -dLat / len
-        if perpLat < 0 { perpLat = -perpLat; perpLon = -perpLon }
-        let segmentLen = len
-        let spacing = segmentLen * 0.04
+              let end = line.coordinates.last else {
+            return curvedApex(of: line.coordinates)
+        }
+        let (count, index) = siblingTransits(for: feature, line: line)
         let centered = Double(index) - Double(count - 1) / 2.0
-        let amount = centered * spacing
-        return CLLocationCoordinate2D(
-            latitude: coord.latitude + perpLat * amount,
-            longitude: coord.longitude + perpLon * amount
+        let t = max(0.1, min(0.9, 0.5 + centered * 0.1))
+        return bezierPoint(
+            at: t,
+            from: start,
+            to: end,
+            perpOffset: curveOffset(from: start, to: end)
         )
     }
 
@@ -954,8 +948,7 @@ private struct MapLevelView: View {
     private func transitContent(feature: KMLFeature,
                                 line: KMLFeature.LineString) -> some MapContent {
         let coords = curvedPath(line.coordinates)
-        let markerCoord = curvedApex(of: line.coordinates)
-            .map { offsetMarker(coord: $0, for: feature, line: line) }
+        let markerCoord = markerPosition(for: feature, line: line)
         MapPolyline(coordinates: coords)
             .stroke(dayShapeHorizontal(feature.days, anchors: level.document.dayAnchors), lineWidth: 3)
         if let mid = markerCoord {
