@@ -39,6 +39,17 @@ final class KMLParser: NSObject, XMLParserDelegate {
     private var polygonInner: [[CLLocationCoordinate2D]] = []
     private var inOuterBoundary = false
     private var inInnerBoundary = false
+    private var currentWhen: String?
+    private var currentBegin: String?
+    private var currentEnd: String?
+
+    private static let isoDate: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
 
     func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI: String?, qualifiedName qName: String?,
@@ -54,6 +65,9 @@ final class KMLParser: NSObject, XMLParserDelegate {
             currentCoordinates = []
             polygonOuter = []
             polygonInner = []
+            currentWhen = nil
+            currentBegin = nil
+            currentEnd = nil
         case "Point": currentGeometry = .point
         case "LineString": currentGeometry = .lineString
         case "Polygon": currentGeometry = .polygon
@@ -106,7 +120,14 @@ final class KMLParser: NSObject, XMLParserDelegate {
             }
         case "Data":
             currentDataKey = nil
+        case "when":
+            if inPlacemark, !trimmed.isEmpty { currentWhen = trimmed }
+        case "begin":
+            if inPlacemark, !trimmed.isEmpty { currentBegin = trimmed }
+        case "end":
+            if inPlacemark, !trimmed.isEmpty { currentEnd = trimmed }
         case "Placemark":
+            deriveDaysFromTime()
             if let geometry = currentGeometry {
                 switch geometry {
                 case .point:
@@ -133,6 +154,31 @@ final class KMLParser: NSObject, XMLParserDelegate {
         default: break
         }
         currentText = ""
+    }
+
+    private func deriveDaysFromTime() {
+        guard currentAttributes["days"] == nil else { return }
+        guard let startStr = documentAttributes["start_date"],
+              let start = Self.isoDate.date(from: startStr) else { return }
+        let cal = Calendar(identifier: .gregorian)
+        if let beginStr = currentBegin, let endStr = currentEnd,
+           let begin = Self.isoDate.date(from: beginStr),
+           let end = Self.isoDate.date(from: endStr),
+           let beginDay = cal.dateComponents([.day], from: start, to: begin).day,
+           let endDay = cal.dateComponents([.day], from: start, to: end).day {
+            let days = (beginDay + 1)...(endDay + 1)
+            currentAttributes["days"] = days.map(String.init).joined(separator: ",")
+            if currentAttributes["nights"] == nil {
+                currentAttributes["nights"] = String(endDay - beginDay)
+            }
+        } else if let whenStr = currentWhen,
+                  let when = Self.isoDate.date(from: whenStr),
+                  let day = cal.dateComponents([.day], from: start, to: when).day {
+            currentAttributes["days"] = String(day + 1)
+            if currentAttributes["nights"] == nil {
+                currentAttributes["nights"] = "0"
+            }
+        }
     }
 
     private func parseCoordinates(_ text: String) -> [CLLocationCoordinate2D] {
