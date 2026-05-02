@@ -2069,25 +2069,37 @@ private actor RoutePathResolver {
               vehicle: String?) async -> [CLLocationCoordinate2D]? {
         let key = Self.key(start: start, end: end, vehicle: vehicle)
         if let cached = cache[key] { return cached }
-        guard let type = naturalTransportType(for: vehicle) else { return nil }
+        guard let primary = naturalTransportType(for: vehicle) else { return nil }
 
-        let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
-        request.transportType = type
+        // Try the natural transport type first; if Apple Maps has no data for it (which is
+        // common for inter-city rail), fall back through automobile then walking so we still
+        // surface a real-world geometry instead of a bezier guess.
+        var types: [MKDirectionsTransportType] = [primary]
+        for fallback in [MKDirectionsTransportType.automobile, .walking]
+            where !types.contains(fallback) { types.append(fallback) }
 
-        do {
-            let response = try await MKDirections(request: request).calculate()
-            guard let route = response.routes.first else { return nil }
-            let count = route.polyline.pointCount
-            guard count > 1 else { return nil }
-            var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: count)
-            route.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: count))
-            cache[key] = coords
-            return coords
-        } catch {
-            return nil
+        for type in types {
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
+            request.transportType = type
+
+            if let coords = try? await fetchRoute(request: request), !coords.isEmpty {
+                cache[key] = coords
+                return coords
+            }
         }
+        return nil
+    }
+
+    private func fetchRoute(request: MKDirections.Request) async throws -> [CLLocationCoordinate2D] {
+        let response = try await MKDirections(request: request).calculate()
+        guard let route = response.routes.first else { return [] }
+        let count = route.polyline.pointCount
+        guard count > 1 else { return [] }
+        var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: count)
+        route.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: count))
+        return coords
     }
 }
 
