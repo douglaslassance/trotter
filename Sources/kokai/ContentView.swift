@@ -1414,7 +1414,7 @@ private struct TransitBadge: View {
         let shape = Capsule()
         return HStack(spacing: 8) {
             Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.primary)
             VStack(alignment: .leading, spacing: 0) {
                 if let name = feature.name, !name.isEmpty {
@@ -1425,9 +1425,9 @@ private struct TransitBadge: View {
                 if let duration = feature.duration {
                     HStack(spacing: 2) {
                         Image(systemName: "clock")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                         Text(duration)
-                            .font(.system(size: 9, weight: .heavy))
+                            .font(.system(size: 10, weight: .heavy))
                             .monospacedDigit()
                     }
                     .foregroundStyle(.secondary)
@@ -1435,8 +1435,8 @@ private struct TransitBadge: View {
             }
         }
         .fixedSize()
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(shape.fill(.regularMaterial))
         .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
         .contentShape(shape)
