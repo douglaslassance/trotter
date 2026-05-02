@@ -37,6 +37,8 @@ struct KMLDocument {
         features.flatMap(\.days).max() ?? 1
     }
 
+    var totalDays: Int { lastDay }
+
     var totalNights: Int {
         features.reduce(0) { $0 + $1.nights }
     }
