@@ -1399,60 +1399,65 @@ private struct TransitBadge: View {
     }
 
     private var iconOnlyBody: some View {
-        markerBody(width: 31, height: 31, iconSize: 15, showDuration: false)
+        let shape = Capsule()
+        return Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(width: 36, height: 28)
+            .background(shape.fill(.regularMaterial))
+            .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
+            .contentShape(shape)
+            .shadow(radius: 2, y: 1)
     }
 
     private var fullBody: some View {
-        VStack(spacing: 2) {
-            markerBody(width: 46, height: 50, iconSize: 22, showDuration: true)
-                .overlay(alignment: .topLeading) {
-                    switch validation {
-                    case .validated:
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 8, height: 8)
-                            .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                            .offset(x: -2, y: -2)
-                            .allowsHitTesting(false)
-                    case .notFound, .failed:
-                        UnverifiedTicketBadge()
-                            .offset(x: -6, y: -6)
-                            .allowsHitTesting(false)
-                    case .none:
-                        EmptyView()
-                    }
-                }
-            if let name = feature.name, !name.isEmpty {
-                PlaceLabel(text: name, isDrillable: false)
-                    .fixedSize()
-                    .allowsHitTesting(false)
-            }
-        }
-    }
-
-    private func markerBody(width: CGFloat, height: CGFloat, iconSize: CGFloat, showDuration: Bool) -> some View {
-        let diameter = max(width, height)
-        let shape = Circle()
-        return VStack(spacing: 1) {
+        let shape = Capsule()
+        return HStack(spacing: 8) {
             Image(systemName: vehicleIcon(feature.vehicle) ?? "questionmark")
-                .font(.system(size: iconSize, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.primary)
-            if showDuration, let duration = feature.duration {
-                HStack(spacing: 2) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 8, weight: .bold))
-                    Text(duration)
-                        .font(.system(size: 9, weight: .heavy))
-                        .monospacedDigit()
+            VStack(alignment: .leading, spacing: 0) {
+                if let name = feature.name, !name.isEmpty {
+                    Text(name)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
                 }
-                .foregroundStyle(.secondary)
+                if let duration = feature.duration {
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 8, weight: .bold))
+                        Text(duration)
+                            .font(.system(size: 9, weight: .heavy))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(.secondary)
+                }
             }
         }
-        .frame(width: diameter, height: diameter)
+        .fixedSize()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background(shape.fill(.regularMaterial))
         .overlay(shape.stroke(strokeStyle, lineWidth: isSelected ? 1.5 : 0.5))
         .contentShape(shape)
         .shadow(radius: 2, y: 1)
+        .overlay(alignment: .topLeading) {
+            switch validation {
+            case .validated:
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                    .offset(x: -2, y: -2)
+                    .allowsHitTesting(false)
+            case .notFound, .failed:
+                UnverifiedTicketBadge()
+                    .offset(x: -6, y: -6)
+                    .allowsHitTesting(false)
+            case .none:
+                EmptyView()
+            }
+        }
     }
 
     private var validationDotColor: Color? {
