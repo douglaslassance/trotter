@@ -351,15 +351,17 @@ private func curveOffset(from start: CLLocationCoordinate2D,
 }
 
 private func curvedPath(_ original: [CLLocationCoordinate2D],
-                        curveBalance: Double = 1.0) -> [CLLocationCoordinate2D] {
+                        lateralShift: Double = 0) -> [CLLocationCoordinate2D] {
     guard original.count >= 2 else { return original }
     var result: [CLLocationCoordinate2D] = []
     for i in 0..<original.count - 1 {
         let start = original[i]
         let end = original[i + 1]
         let baseOffset = curveOffset(from: start, to: end)
-        let segment = bezierSegment(from: start, to: end,
-                                    perpOffset: baseOffset * curveBalance)
+        var segment = bezierSegment(from: start, to: end, perpOffset: baseOffset)
+        if abs(lateralShift) > 0 {
+            segment = segment.map { translatePerpendicular($0, from: start, to: end, by: lateralShift) }
+        }
         if i == 0 {
             result.append(contentsOf: segment)
         } else {
@@ -367,6 +369,23 @@ private func curvedPath(_ original: [CLLocationCoordinate2D],
         }
     }
     return result
+}
+
+private func translatePerpendicular(_ coord: CLLocationCoordinate2D,
+                                    from start: CLLocationCoordinate2D,
+                                    to end: CLLocationCoordinate2D,
+                                    by amount: Double) -> CLLocationCoordinate2D {
+    let dLat = end.latitude - start.latitude
+    let dLon = end.longitude - start.longitude
+    let length = sqrt(dLat * dLat + dLon * dLon)
+    guard length > 0.0001 else { return coord }
+    var perpLat = dLon / length
+    var perpLon = -dLat / length
+    if perpLat < 0 { perpLat = -perpLat; perpLon = -perpLon }
+    return CLLocationCoordinate2D(
+        latitude: coord.latitude + perpLat * amount,
+        longitude: coord.longitude + perpLon * amount
+    )
 }
 
 private func bezierApex(from start: CLLocationCoordinate2D,
@@ -834,29 +853,35 @@ private struct MapLevelView: View {
         return (siblings.count, index)
     }
 
-    private func curveBalance(for feature: KMLFeature,
+    private func lateralShift(for feature: KMLFeature,
                               line: KMLFeature.LineString) -> Double {
         let (count, index) = siblingTransits(for: feature, line: line)
-        guard count > 1 else { return 1.0 }
-        // Map sibling index to a symmetric -1..+1 range so siblings bulge to opposite sides
-        // of the straight line. Negative values flip the curve south of the line.
-        return (Double(index) - Double(count - 1) / 2.0) * 2 / Double(count - 1)
+        guard count > 1 else { return 0 }
+        let stepDegrees = 0.005
+        let centered = Double(index) - Double(count - 1) / 2.0
+        return centered * stepDegrees
     }
 
     private func markerPosition(for feature: KMLFeature,
                                 line: KMLFeature.LineString,
-                                curveBalance: Double) -> CLLocationCoordinate2D? {
+                                lateralShift: Double) -> CLLocationCoordinate2D? {
         guard line.coordinates.count == 2,
               let start = line.coordinates.first,
               let end = line.coordinates.last else {
             return curvedApex(of: line.coordinates)
         }
-        return bezierPoint(
-            at: 0.5,
+        let (count, _) = siblingTransits(for: feature, line: line)
+        // For siblings, sit at 40% along the line. Because A->B and B->A are reversed,
+        // the same percentage lands the markers at opposite ends of the segment.
+        let t: Double = count > 1 ? 0.4 : 0.5
+        let base = bezierPoint(
+            at: t,
             from: start,
             to: end,
-            perpOffset: curveOffset(from: start, to: end) * curveBalance
+            perpOffset: curveOffset(from: start, to: end)
         )
+        guard abs(lateralShift) > 0 else { return base }
+        return translatePerpendicular(base, from: start, to: end, by: lateralShift)
     }
 
     private func updateVisibleDays(region: MKCoordinateRegion) {
@@ -958,9 +983,9 @@ private struct MapLevelView: View {
     @MapContentBuilder
     private func transitContent(feature: KMLFeature,
                                 line: KMLFeature.LineString) -> some MapContent {
-        let balance = curveBalance(for: feature, line: line)
-        let coords = curvedPath(line.coordinates, curveBalance: balance)
-        let markerCoord = markerPosition(for: feature, line: line, curveBalance: balance)
+        let shift = lateralShift(for: feature, line: line)
+        let coords = curvedPath(line.coordinates, lateralShift: shift)
+        let markerCoord = markerPosition(for: feature, line: line, lateralShift: shift)
         MapPolyline(coordinates: coords)
             .stroke(dayShapeHorizontal(feature.days, anchors: level.document.dayAnchors), lineWidth: 3)
         if let mid = markerCoord {
