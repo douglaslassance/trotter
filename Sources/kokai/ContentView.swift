@@ -636,21 +636,19 @@ private struct DayLegend: View {
             let dayColor = color(forDay: day, anchors: document.dayAnchors)
             VStack(spacing: 1) {
                 ZStack {
-                    Circle()
-                        .fill(dayColor.opacity(0.18))
-                        .frame(width: 22, height: 22)
                     if let summary = weatherByDay[day] {
                         Image(systemName: weatherIcon(for: summary.code))
                             .symbolRenderingMode(.monochrome)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(dayColor)
                             .help(weatherTooltip(for: summary))
                     } else {
                         Circle()
                             .fill(dayColor)
-                            .frame(width: 8, height: 8)
+                            .frame(width: 10, height: 10)
                     }
                 }
+                .frame(width: 22, height: 22)
                 if let date = document.date(forDay: day) {
                     let cal = Calendar(identifier: .gregorian)
                     let d = cal.component(.day, from: date)
