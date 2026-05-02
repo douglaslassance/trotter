@@ -539,7 +539,7 @@ private struct DayLegend: View {
                             Text(letter)
                                 .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(.secondary)
-                                .frame(width: 24)
+                                .frame(width: 28)
                         }
                     }
                     ForEach(rows) { row in
@@ -609,9 +609,9 @@ private struct DayLegend: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: 24)
+            .frame(width: 28)
         } else {
-            Color.clear.frame(width: 24, height: 32)
+            Color.clear.frame(width: 28, height: 32)
         }
     }
 
