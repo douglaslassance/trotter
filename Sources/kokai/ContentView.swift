@@ -302,8 +302,14 @@ private func bezierMid(from start: CLLocationCoordinate2D,
             longitude: (start.longitude + end.longitude) / 2
         )
     }
-    let perpLat = dLon / length
-    let perpLon = -dLat / length
+    // Bias the curve toward the upper (northern) side so trips read as little jumps,
+    // matching the way you mentally picture arcs on a globe.
+    var perpLat = dLon / length
+    var perpLon = -dLat / length
+    if perpLat < 0 {
+        perpLat = -perpLat
+        perpLon = -perpLon
+    }
     return CLLocationCoordinate2D(
         latitude: (start.latitude + end.latitude) / 2 + perpLat * perpOffset,
         longitude: (start.longitude + end.longitude) / 2 + perpLon * perpOffset
