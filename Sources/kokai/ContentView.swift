@@ -1900,7 +1900,7 @@ private struct TicketStatusBadge: View {
     private var background: Color {
         switch result {
         case .validated: return .green
-        default: return .yellow
+        default: return Color(red: 0.94, green: 0.36, blue: 0.48)
         }
     }
 }
