@@ -1878,15 +1878,50 @@ private actor WeatherResolver {
     }
 
     private func fetchHistorical(coord: CLLocationCoordinate2D, date: Date) async -> WeatherSummary? {
-        // Use the same date one year earlier from the archive as a representative sample.
+        // Sample the same calendar date across the past 3 years and take the most common
+        // weather code (mode), with averaged highs/lows. This dampens single-year anomalies.
         let cal = Calendar(identifier: .gregorian)
-        guard let priorYear = cal.date(byAdding: .year, value: -1, to: date) else { return nil }
-        // The archive is published with a few days delay; clamp to 5 days ago at most.
         let cutoff = cal.date(byAdding: .day, value: -5, to: cal.startOfDay(for: Date())) ?? Date()
-        let target = priorYear < cutoff ? priorYear : cutoff
-        let day = Self.dateFormatter.string(from: target)
-        let url = "https://archive-api.open-meteo.com/v1/archive?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,weathercode&start_date=\(day)&end_date=\(day)&timezone=auto"
-        return await fetch(urlString: url, isHistorical: true)
+
+        var samples: [(code: Int, high: Double, low: Double)] = []
+        for yearsBack in 1...3 {
+            guard let prior = cal.date(byAdding: .year, value: -yearsBack, to: date) else { continue }
+            let target = prior < cutoff ? prior : cutoff
+            let day = Self.dateFormatter.string(from: target)
+            let url = "https://archive-api.open-meteo.com/v1/archive?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,weathercode&start_date=\(day)&end_date=\(day)&timezone=auto"
+            if let s = await fetchRaw(urlString: url) {
+                samples.append(s)
+            }
+        }
+
+        guard !samples.isEmpty else { return nil }
+
+        // Mode of weather codes; tiebreak by lower (sunnier) code.
+        var counts: [Int: Int] = [:]
+        for s in samples { counts[s.code, default: 0] += 1 }
+        let maxCount = counts.values.max() ?? 0
+        let topCodes = counts.filter { $0.value == maxCount }.map(\.key).sorted()
+        let mode = topCodes.first ?? samples[0].code
+        let avgHigh = samples.map(\.high).reduce(0, +) / Double(samples.count)
+        let avgLow = samples.map(\.low).reduce(0, +) / Double(samples.count)
+        return WeatherSummary(highC: avgHigh, lowC: avgLow, code: mode, isHistorical: true)
+    }
+
+    private func fetchRaw(urlString: String) async -> (code: Int, high: Double, low: Double)? {
+        guard let url = URL(string: urlString) else { return nil }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let daily = json["daily"] as? [String: Any],
+                  let highs = daily["temperature_2m_max"] as? [Double],
+                  let lows = daily["temperature_2m_min"] as? [Double],
+                  let codes = daily["weathercode"] as? [Int],
+                  let high = highs.first, let low = lows.first, let code = codes.first
+            else { return nil }
+            return (code, high, low)
+        } catch {
+            return nil
+        }
     }
 
     private func fetch(urlString: String, isHistorical: Bool) async -> WeatherSummary? {
