@@ -971,16 +971,6 @@ private struct MapLevelView: View {
             .tag(feature.id)
 
             if detail == .full {
-                Annotation("", coordinate: point.coordinate, anchor: .center) {
-                    BadWeatherMarkerBadge(coord: point.coordinate,
-                                          days: feature.days,
-                                          document: level.document,
-                                          markerSize: markerSize)
-                        .allowsHitTesting(false)
-                }
-            }
-
-            if detail == .full {
                 ForEach(arrivalBadges(for: feature), id: \.day) { badge in
                     Annotation("", coordinate: badge.coord, anchor: .center) {
                         EntryExitBadge(time: badge.time, day: badge.day, anchors: level.document.dayAnchors)
@@ -1183,6 +1173,7 @@ private struct PlaceMarker: View {
     var coordinate: CLLocationCoordinate2D? = nil
     var document: KMLDocument? = nil
     @State private var isHovering = false
+    @State private var hasBadWeather = false
 
     private var displaysLarge: Bool { nights > 0 }
 
@@ -1244,43 +1235,31 @@ private struct PlaceMarker: View {
                         .offset(x: 4, y: -4)
                 }
             }
+            .overlay(alignment: .topLeading) {
+                if hasBadWeather && detail == .full {
+                    BadWeatherBadge()
+                        .offset(x: -4, y: -4)
+                }
+            }
             .shadow(radius: isHovering || isSelected ? 5 : 3, y: 1)
             .scaleEffect(scale)
             .onHover { isHovering = $0 }
             .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isHovering)
             .animation(.spring(response: 0.32, dampingFraction: 0.6), value: isSelected)
             .animation(.snappy, value: detail)
-    }
-}
-
-private struct BadWeatherMarkerBadge: View {
-    let coord: CLLocationCoordinate2D
-    let days: [Int]
-    let document: KMLDocument
-    let markerSize: CGFloat
-    @State private var hasBadWeather = false
-
-    var body: some View {
-        Color.clear
-            .frame(width: markerSize, height: markerSize)
-            .overlay(alignment: .topLeading) {
-                if hasBadWeather {
-                    BadWeatherBadge()
-                        .offset(x: -4, y: -4)
-                }
-            }
-            .task(id: key) { await check() }
+            .task(id: weatherKey) { await checkWeather() }
     }
 
-    private var key: String {
-        "\(coord.latitude),\(coord.longitude)|\(days.map(String.init).joined(separator: ","))"
+    private var weatherKey: String {
+        guard let coordinate else { return "" }
+        return "\(coordinate.latitude),\(coordinate.longitude)|\(days.map(String.init).joined(separator: ","))"
     }
 
-    private func check() async {
-        guard document.showsWeather, !days.isEmpty else { return }
+    private func checkWeather() async {
+        guard let coordinate, let document, document.showsWeather, !days.isEmpty else { return }
         for day in days {
             guard let date = document.date(forDay: day) else { continue }
-            if let summary = await WeatherResolver.shared.summary(for: coord, date: date),
+            if let summary = await WeatherResolver.shared.summary(for: coordinate, date: date),
                isBadWeather(code: summary.code) {
                 await MainActor.run { hasBadWeather = true }
                 return
