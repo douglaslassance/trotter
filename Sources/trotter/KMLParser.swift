@@ -16,7 +16,8 @@ final class KMLParser: NSObject, XMLParserDelegate {
         return KMLDocument(name: parser.documentName,
                            details: parser.documentDetails,
                            attributes: parser.documentAttributes,
-                           features: parser.features)
+                           features: parser.features,
+                           networkLinks: parser.networkLinks)
     }
 
     private enum GeometryKind { case point, lineString, polygon }
@@ -27,6 +28,11 @@ final class KMLParser: NSObject, XMLParserDelegate {
     private var documentName: String?
     private var documentDetails: String?
     private var documentAttributes: [String: String] = [:]
+
+    private var networkLinks: [String: String] = [:]
+    private var inNetworkLink = false
+    private var networkLinkName: String?
+    private var networkLinkHref: String?
 
     private var inPlacemark = false
     private var currentName: String?
@@ -56,6 +62,10 @@ final class KMLParser: NSObject, XMLParserDelegate {
                 attributes attributeDict: [String: String] = [:]) {
         currentText = ""
         switch elementName {
+        case "NetworkLink":
+            inNetworkLink = true
+            networkLinkName = nil
+            networkLinkHref = nil
         case "Placemark":
             inPlacemark = true
             currentName = nil
@@ -95,11 +105,21 @@ final class KMLParser: NSObject, XMLParserDelegate {
 
         switch elementName {
         case "name":
-            if inPlacemark, currentName == nil { currentName = trimmed }
+            if inNetworkLink, networkLinkName == nil { networkLinkName = trimmed }
+            else if inPlacemark, currentName == nil { currentName = trimmed }
             else if !inPlacemark, documentName == nil { documentName = trimmed }
         case "description":
             if inPlacemark, currentDetails == nil { currentDetails = trimmed }
             else if !inPlacemark, documentDetails == nil { documentDetails = trimmed }
+        case "href":
+            if inNetworkLink, !trimmed.isEmpty { networkLinkHref = trimmed }
+        case "NetworkLink":
+            if let n = networkLinkName, let h = networkLinkHref {
+                networkLinks[n] = h
+            }
+            inNetworkLink = false
+            networkLinkName = nil
+            networkLinkHref = nil
         case "coordinates":
             let coords = parseCoordinates(trimmed)
             if currentGeometry == .polygon {

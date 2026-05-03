@@ -11,6 +11,9 @@ struct KMLDocument {
     var details: String?
     var attributes: [String: String]
     let features: [KMLFeature]
+    /// Sub-map references parsed from `<NetworkLink>` elements: name -> href.
+    /// hrefs are kept as written in the KML (typically relative paths).
+    var networkLinks: [String: String] = [:]
 
     var startDate: Date? {
         guard let s = attributes["start_date"] else { return nil }

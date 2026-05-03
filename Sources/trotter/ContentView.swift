@@ -91,6 +91,17 @@ private func youtubeSearchURL(for feature: KMLFeature) -> URL? {
     return components?.url
 }
 
+private func airbnbSearchURL(coord: CLLocationCoordinate2D, name: String?) -> URL? {
+    let query: String
+    if let name, !name.isEmpty {
+        query = name
+    } else {
+        query = "\(coord.latitude),\(coord.longitude)"
+    }
+    let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? query
+    return URL(string: "https://www.airbnb.com/s/\(encoded)/homes")
+}
+
 private func googleMapsURL(coord: CLLocationCoordinate2D, name: String?) -> URL? {
     var components = URLComponents(string: "https://www.google.com/maps/search/")
     let q: String
@@ -643,17 +654,32 @@ private struct DayLegend: View {
                         }
                     }
                     if let range = temperatureRangeText {
-                        HStack(spacing: 3) {
-                            Image(systemName: "thermometer.medium")
-                                .symbolRenderingMode(.monochrome)
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                            Text(range)
-                                .font(.caption.bold())
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "thermometer.medium")
+                                    .symbolRenderingMode(.monochrome)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                Text(range)
+                                    .font(.caption.bold())
+                                    .monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                            }
+                            .help("Typical low - high across these days")
+                            if let h = humidityRangeText {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "humidity")
+                                        .symbolRenderingMode(.monochrome)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                    Text(h)
+                                        .font(.caption.bold())
+                                        .monospacedDigit()
+                                        .foregroundStyle(.secondary)
+                                }
+                                .help("Typical humidity range across these days")
+                            }
                         }
-                        .help("Typical low - high across these days")
                     }
                 }
             }
@@ -718,21 +744,35 @@ private struct DayLegend: View {
         return "\(Int(minLow.rounded()))-\(Int(maxHigh.rounded())) °C"
     }
 
+    private var humidityRangeText: String? {
+        let summaries = days.compactMap { weatherByDay[$0] }
+        let values = summaries.compactMap(\.humidity)
+        guard !values.isEmpty,
+              let minH = values.min(), let maxH = values.max() else { return nil }
+        return "\(Int(minH.rounded()))-\(Int(maxH.rounded())) %"
+    }
+
     private func loadWeather() async {
         guard document.showsWeather else {
             await MainActor.run { weatherByDay = [:] }
             return
         }
-        var results: [Int: WeatherSummary] = [:]
-        for day in days {
+        let pending: [(Int, CLLocationCoordinate2D, Date)] = days.compactMap { day in
             guard let coord = coordinate(for: day),
-                  let date = document.date(forDay: day) else { continue }
-            if let summary = await WeatherResolver.shared.summary(for: coord, date: date) {
-                results[day] = summary
-            }
+                  let date = document.date(forDay: day) else { return nil }
+            return (day, coord, date)
         }
-        let collected = results
-        await MainActor.run { weatherByDay = collected }
+        let results = await withTaskGroup(of: (Int, WeatherSummary?).self) { group in
+            for (day, coord, date) in pending {
+                group.addTask { (day, await WeatherResolver.shared.summary(for: coord, date: date)) }
+            }
+            var collected: [Int: WeatherSummary] = [:]
+            for await (day, summary) in group {
+                if let summary { collected[day] = summary }
+            }
+            return collected
+        }
+        await MainActor.run { weatherByDay = results }
     }
 }
 
@@ -1236,7 +1276,7 @@ private struct PlaceMarker: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                if hasBadWeather && detail == .full {
+                if hasBadWeather && detail == .full && !days.isEmpty {
                     BadWeatherBadge()
                         .offset(x: -4, y: -4)
                 }
@@ -1637,21 +1677,37 @@ private struct PlacePopover: View {
                     .frame(height: 160)
                     .clipped()
                     .overlay(alignment: .topLeading) {
-                        if let range = temperatureRangeText {
-                            HStack(spacing: 3) {
-                                Image(systemName: "thermometer.medium")
-                                    .font(.caption.bold())
-                                Text(range)
-                                    .font(.caption.bold())
-                                    .monospacedDigit()
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let range = temperatureRangeText {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "thermometer.medium")
+                                        .font(.caption.bold())
+                                    Text(range)
+                                        .font(.caption.bold())
+                                        .monospacedDigit()
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.55), in: Capsule())
+                                .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
                             }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.55), in: Capsule())
-                            .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
-                            .padding(8)
+                            if let h = humidityRangeText {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "humidity")
+                                        .font(.caption.bold())
+                                    Text(h)
+                                        .font(.caption.bold())
+                                        .monospacedDigit()
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.55), in: Capsule())
+                                .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                            }
                         }
+                        .padding(8)
                     }
                 ImageRefreshButton { imageRefreshTrigger += 1 }
                     .padding(8)
@@ -1685,9 +1741,12 @@ private struct PlacePopover: View {
         guard totalMinutes > 0 else { return nil }
         let days = totalMinutes / (24 * 60)
         let hours = (totalMinutes % (24 * 60)) / 60
+        let minutes = totalMinutes % 60
         if days > 0 && hours > 0 { return "\(days)d \(hours)h" }
         if days > 0 { return "\(days)d" }
-        return "\(hours)h"
+        if hours > 0 && minutes > 0 { return "\(hours)h \(minutes)m" }
+        if hours > 0 { return "\(hours)h" }
+        return "\(minutes)m"
     }
 
     private func combinedDate(day: Int, time: String?) -> Date? {
@@ -1734,12 +1793,13 @@ private struct PlacePopover: View {
                             weatherByDay: weatherByDay)
             }
             HStack(spacing: 8) {
-                if canOpen, let name = feature.name {
+                if canOpen {
                     Button(action: onOpen) {
-                        Label("Open \(name)", systemImage: "arrow.down.right.circle")
+                        Label("Open", systemImage: "map.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.accentColor)
                     .controlSize(.regular)
                 } else {
                     Spacer(minLength: 0)
@@ -1750,6 +1810,10 @@ private struct PlacePopover: View {
                 if let coord = feature.coordinates.first,
                    let mapsURL = googleMapsURL(coord: coord, name: feature.name) {
                     ActionIconLink(url: mapsURL, systemImage: "map.fill", helpText: "Open in Google Maps")
+                }
+                if let coord = feature.coordinates.first,
+                   let airbnbURL = airbnbSearchURL(coord: coord, name: feature.name) {
+                    ActionIconLink(url: airbnbURL, systemImage: "house.fill", helpText: "Search on Airbnb")
                 }
                 if let youtubeURL = youtubeSearchURL(for: feature) {
                     ActionIconLink(url: youtubeURL, systemImage: "play.rectangle.fill", helpText: "Search on YouTube")
@@ -1791,17 +1855,31 @@ private struct PlacePopover: View {
         return "\(Int(minLow.rounded()))-\(Int(maxHigh.rounded())) °C"
     }
 
+    private var humidityRangeText: String? {
+        let summaries = feature.days.compactMap { weatherByDay[$0] }
+        let values = summaries.compactMap(\.humidity)
+        guard !values.isEmpty,
+              let minH = values.min(), let maxH = values.max() else { return nil }
+        return "\(Int(minH.rounded()))-\(Int(maxH.rounded())) %"
+    }
+
     private func resolveWeather() async {
         guard document.showsWeather, let coord = feature.coordinates.first else { return }
-        var results: [Int: WeatherSummary] = [:]
-        for day in feature.days {
-            guard let date = document.date(forDay: day) else { continue }
-            if let summary = await WeatherResolver.shared.summary(for: coord, date: date) {
-                results[day] = summary
-            }
+        let pending: [(Int, Date)] = feature.days.compactMap { day in
+            guard let date = document.date(forDay: day) else { return nil }
+            return (day, date)
         }
-        let collected = results
-        await MainActor.run { weatherByDay = collected }
+        let results = await withTaskGroup(of: (Int, WeatherSummary?).self) { group in
+            for (day, date) in pending {
+                group.addTask { (day, await WeatherResolver.shared.summary(for: coord, date: date)) }
+            }
+            var collected: [Int: WeatherSummary] = [:]
+            for await (day, summary) in group {
+                if let summary { collected[day] = summary }
+            }
+            return collected
+        }
+        await MainActor.run { weatherByDay = results }
     }
 }
 
@@ -2297,6 +2375,8 @@ struct WeatherSummary: Equatable {
     let lowC: Double
     let code: Int
     let isHistorical: Bool
+    /// Daily-mean relative humidity in percent (0-100), if available.
+    var humidity: Double?
 }
 
 private func weatherTooltip(for summary: WeatherSummary) -> String {
@@ -2362,7 +2442,7 @@ private actor WeatherResolver {
 
     private func fetchForecast(coord: CLLocationCoordinate2D, date: Date) async -> WeatherSummary? {
         let day = Self.dateFormatter.string(from: date)
-        let url = "https://api.open-meteo.com/v1/forecast?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,weathercode&start_date=\(day)&end_date=\(day)&timezone=auto"
+        let url = "https://api.open-meteo.com/v1/forecast?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,weathercode,relative_humidity_2m_mean&start_date=\(day)&end_date=\(day)&timezone=auto"
         return await fetch(urlString: url, isHistorical: false)
     }
 
@@ -2375,15 +2455,15 @@ private actor WeatherResolver {
         let cal = Calendar(identifier: .gregorian)
         let cutoff = cal.date(byAdding: .day, value: -5, to: cal.startOfDay(for: Date())) ?? Date()
 
-        let samples: [(code: Int, high: Double, low: Double)] = await withTaskGroup(of: [(code: Int, high: Double, low: Double)].self) { group in
+        let samples: [(code: Int, high: Double, low: Double, humidity: Double?)] = await withTaskGroup(of: [(code: Int, high: Double, low: Double, humidity: Double?)].self) { group in
             for yearsBack in 1...5 {
                 guard let prior = cal.date(byAdding: .year, value: -yearsBack, to: date) else { continue }
                 let target = prior < cutoff ? prior : cutoff
                 let day = Self.dateFormatter.string(from: target)
-                let url = "https://archive-api.open-meteo.com/v1/archive?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,cloud_cover_mean,precipitation_sum&start_date=\(day)&end_date=\(day)&timezone=auto"
+                let url = "https://archive-api.open-meteo.com/v1/archive?latitude=\(coord.latitude)&longitude=\(coord.longitude)&daily=temperature_2m_max,temperature_2m_min,cloud_cover_mean,precipitation_sum,relative_humidity_2m_mean&start_date=\(day)&end_date=\(day)&timezone=auto"
                 group.addTask { await self.fetchDerivedSeries(urlString: url) }
             }
-            var collected: [(code: Int, high: Double, low: Double)] = []
+            var collected: [(code: Int, high: Double, low: Double, humidity: Double?)] = []
             for await batch in group { collected.append(contentsOf: batch) }
             return collected
         }
@@ -2418,10 +2498,12 @@ private actor WeatherResolver {
 
         let avgHigh = samples.map(\.high).reduce(0, +) / Double(samples.count)
         let avgLow = samples.map(\.low).reduce(0, +) / Double(samples.count)
-        return WeatherSummary(highC: avgHigh, lowC: avgLow, code: mode, isHistorical: true)
+        let humidities = samples.compactMap(\.humidity)
+        let avgHumidity = humidities.isEmpty ? nil : humidities.reduce(0, +) / Double(humidities.count)
+        return WeatherSummary(highC: avgHigh, lowC: avgLow, code: mode, isHistorical: true, humidity: avgHumidity)
     }
 
-    private func fetchDerivedSeries(urlString: String) async -> [(code: Int, high: Double, low: Double)] {
+    private func fetchDerivedSeries(urlString: String) async -> [(code: Int, high: Double, low: Double, humidity: Double?)] {
         guard let url = URL(string: urlString) else { return [] }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
@@ -2432,9 +2514,11 @@ private actor WeatherResolver {
                   let clouds = daily["cloud_cover_mean"] as? [Double?],
                   let precip = daily["precipitation_sum"] as? [Double?]
             else { return [] }
+            let humidity = (daily["relative_humidity_2m_mean"] as? [Double?]) ?? Array(repeating: nil, count: highs.count)
             let n = min(min(highs.count, lows.count), min(clouds.count, precip.count))
             return (0..<n).map { i in
-                (Self.derivedCode(cloudCover: clouds[i], precipitation: precip[i]), highs[i], lows[i])
+                let h = i < humidity.count ? humidity[i] : nil
+                return (Self.derivedCode(cloudCover: clouds[i], precipitation: precip[i]), highs[i], lows[i], h)
             }
         } catch {
             return []
@@ -2462,7 +2546,8 @@ private actor WeatherResolver {
                   let codes = daily["weathercode"] as? [Int],
                   let high = highs.first, let low = lows.first, let code = codes.first
             else { return nil }
-            return WeatherSummary(highC: high, lowC: low, code: code, isHistorical: isHistorical)
+            let humidity = (daily["relative_humidity_2m_mean"] as? [Double?])?.first ?? nil
+            return WeatherSummary(highC: high, lowC: low, code: code, isHistorical: isHistorical, humidity: humidity ?? nil)
         } catch {
             return nil
         }

@@ -133,7 +133,7 @@ final class NavigationModel {
 
     func drillDown(matching name: String) throws -> Bool {
         guard let parent = current else { return false }
-        guard let childURL = resolveSibling(named: name, near: parent.url) else {
+        guard let childURL = resolveSibling(named: name, near: parent.url, document: parent.document) else {
             return false
         }
         let level = try makeLevel(at: childURL)
@@ -160,17 +160,28 @@ final class NavigationModel {
 
     func canDrillDown(into name: String) -> Bool {
         guard let parent = current else { return false }
-        return resolveSibling(named: name, near: parent.url) != nil
+        return resolveSibling(named: name, near: parent.url, document: parent.document) != nil
     }
 
-    private func resolveSibling(named name: String, near url: URL) -> URL? {
+    private func resolveSibling(named name: String, near url: URL, document: KMLDocument?) -> URL? {
+        let fm = FileManager.default
+
+        // 1) Honor explicit NetworkLink hrefs from the parent KML.
+        // The href is resolved relative to the parent's directory, so it can
+        // point into a sibling folder via "../other-folder/foo.kml".
+        if let href = document?.networkLinks[name] {
+            let resolved = URL(fileURLWithPath: href, relativeTo: url.deletingLastPathComponent()).standardizedFileURL
+            if fm.fileExists(atPath: resolved.path) {
+                return resolved
+            }
+        }
+
         let folder = url.deletingPathExtension().deletingLastPathComponent()
         let parentFolder = url.deletingLastPathComponent()
         let candidates = [
             parentFolder.appendingPathComponent("\(name).kml"),
             folder.appendingPathComponent("\(name).kml"),
         ]
-        let fm = FileManager.default
         if let hit = candidates.first(where: { fm.fileExists(atPath: $0.path) }) {
             return hit
         }
