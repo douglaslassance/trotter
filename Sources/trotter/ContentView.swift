@@ -91,7 +91,8 @@ private func youtubeSearchURL(for feature: KMLFeature) -> URL? {
     return components?.url
 }
 
-private func airbnbSearchURL(coord: CLLocationCoordinate2D, name: String?) -> URL? {
+private func airbnbSearchURL(coord: CLLocationCoordinate2D, name: String?,
+                             checkin: Date? = nil, checkout: Date? = nil) -> URL? {
     let query: String
     if let name, !name.isEmpty {
         query = name
@@ -99,7 +100,16 @@ private func airbnbSearchURL(coord: CLLocationCoordinate2D, name: String?) -> UR
         query = "\(coord.latitude),\(coord.longitude)"
     }
     let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? query
-    return URL(string: "https://www.airbnb.com/s/\(encoded)/homes")
+    var components = URLComponents(string: "https://www.airbnb.com/s/\(encoded)/homes")
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd"
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.timeZone = TimeZone(secondsFromGMT: 0)
+    var items: [URLQueryItem] = []
+    if let checkin { items.append(URLQueryItem(name: "checkin", value: f.string(from: checkin))) }
+    if let checkout { items.append(URLQueryItem(name: "checkout", value: f.string(from: checkout))) }
+    if !items.isEmpty { components?.queryItems = items }
+    return components?.url
 }
 
 private func googleMapsURL(coord: CLLocationCoordinate2D, name: String?) -> URL? {
@@ -297,6 +307,10 @@ private func formatDate(_ date: Date) -> String {
     date.formatted(.dateTime.month(.abbreviated).day())
 }
 
+private func formatWeekday(_ date: Date) -> String {
+    date.formatted(.dateTime.weekday(.abbreviated))
+}
+
 private func bezierMid(from start: CLLocationCoordinate2D,
                        to end: CLLocationCoordinate2D,
                        perpOffset: Double,
@@ -453,10 +467,16 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 BreadcrumbBar(nav: nav)
                 if let level = nav.current {
-                    TripInfoBar(document: level.document,
-                                visibleDays: visibleDays,
+                    let isSubmap = nav.stack.count > 1
+                    let root = nav.stack.first ?? level
+                    let contextDocument = isSubmap ? root.document : level.document
+                    let contextDays = isSubmap
+                        ? daysForSubmap(level: level, in: root)
+                        : visibleDays
+                    TripInfoBar(document: contextDocument,
+                                visibleDays: contextDays,
                                 visibleFeatureIDs: visibleFeatureIDs)
-                    DayLegend(document: level.document, days: visibleDays)
+                    DayLegend(document: contextDocument, days: contextDays)
                 }
             }
             .padding(12)
@@ -466,6 +486,19 @@ struct ContentView: View {
             visibleDays = []
             visibleFeatureIDs = []
         }
+    }
+
+    /// When drilled into a sub-map, return the trip days that the parent
+    /// destination spans, by matching the sub-map's document name to a
+    /// feature in the root.
+    private func daysForSubmap(level: NavigationModel.Level,
+                               in root: NavigationModel.Level) -> [Int] {
+        guard let subName = level.document.name?.lowercased() else { return [] }
+        for feature in root.document.features {
+            guard let name = feature.name?.lowercased(), name == subName else { continue }
+            if !feature.days.isEmpty { return feature.days }
+        }
+        return []
     }
 }
 
@@ -507,7 +540,7 @@ private struct TripInfoBar: View {
                     Image(systemName: "calendar")
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
-                    Text("\(formatDate(start)) to \(formatDate(end))")
+                    Text("\(formatWeekday(start)), \(formatDate(start)) to \(formatWeekday(end)), \(formatDate(end))")
                         .font(.caption.bold())
                         .monospacedDigit()
                 }
@@ -628,6 +661,15 @@ private struct DayLegend: View {
                         }
                     }
                     ForEach(rows) { row in
+                        if let label = monthLabel(for: row) {
+                            Text(label)
+                                .font(.system(size: 9, weight: .heavy))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 8)
+                                .padding(.bottom, 2)
+                        }
                         HStack(spacing: 4) {
                             ForEach(Array(row.cells.enumerated()), id: \.offset) { _, day in
                                 cell(for: day)
@@ -719,9 +761,8 @@ private struct DayLegend: View {
                 if let date = document.date(forDay: day) {
                     let cal = Calendar(identifier: .gregorian)
                     let d = cal.component(.day, from: date)
-                    let m = cal.component(.month, from: date)
-                    Text("\(d)-\(m)")
-                        .font(.system(size: 8, weight: .semibold))
+                    Text("\(d)")
+                        .font(.system(size: 9, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -734,6 +775,26 @@ private struct DayLegend: View {
 
     private var legendKey: String {
         days.map(String.init).joined(separator: ",")
+    }
+
+    /// Show a month label above a week row when:
+    /// - it's the first row of the calendar (label is the trip-start month), or
+    /// - the row contains the 1st of a month (label is that new month).
+    private func monthLabel(for row: WeekRow) -> String? {
+        let cal = Calendar(identifier: .gregorian)
+        let validDays = row.cells.compactMap { $0 }
+        guard !validDays.isEmpty else { return nil }
+        if row.id == rows.first?.id, let first = validDays.first,
+           let date = document.date(forDay: first) {
+            return date.formatted(.dateTime.month(.abbreviated))
+        }
+        for day in validDays {
+            guard let date = document.date(forDay: day) else { continue }
+            if cal.component(.day, from: date) == 1 {
+                return date.formatted(.dateTime.month(.abbreviated))
+            }
+        }
+        return nil
     }
 
     private var temperatureRangeText: String? {
@@ -1445,67 +1506,67 @@ private struct DayTimeline: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if startTime != nil || startDate != nil {
-                VStack(alignment: .leading, spacing: 2) {
-                    if let startDate {
-                        Text(formatDate(startDate))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    if let startTime {
-                        Text(startTime)
-                            .font(.caption.bold())
-                            .monospacedDigit()
-                    }
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                if let startDate {
+                    Text("\(formatWeekday(startDate)), \(formatDate(startDate))")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 0)
+                if let endDate {
+                    Text("\(formatWeekday(endDate)), \(formatDate(endDate))")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
             }
-            Capsule()
-                .fill(LinearGradient(
-                    colors: gradientColors,
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ))
-                .frame(height: 14)
-                .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 0.5))
-                .overlay(
-                    HStack(spacing: 0) {
-                        ForEach(days, id: \.self) { day in
-                            ZStack {
-                                if displayedWeatherDays.contains(day), let summary = weatherByDay[day] {
-                                    let bad = isBadWeather(code: summary.code)
-                                    Circle()
-                                        .fill(bad ? AnyShapeStyle(badWeatherColor) : AnyShapeStyle(.background))
-                                        .frame(width: 24, height: 24)
-                                        .overlay(Circle().stroke(.separator, lineWidth: 0.5))
-                                        .shadow(radius: 2, y: 1)
-                                    Image(systemName: weatherIcon(for: summary.code))
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .symbolRenderingMode(.monochrome)
-                                        .foregroundStyle(bad ? AnyShapeStyle(Color.white) : (summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange)))
-                                        .help(weatherTooltip(for: summary))
+            HStack(alignment: .center, spacing: 8) {
+                if let startTime {
+                    Text(startTime)
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                } else {
+                    Text("").frame(minWidth: 0)
+                }
+                Capsule()
+                    .fill(LinearGradient(
+                        colors: gradientColors,
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ))
+                    .frame(height: 14)
+                    .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 0.5))
+                    .overlay(
+                        HStack(spacing: 0) {
+                            ForEach(days, id: \.self) { day in
+                                ZStack {
+                                    if displayedWeatherDays.contains(day), let summary = weatherByDay[day] {
+                                        let bad = isBadWeather(code: summary.code)
+                                        Circle()
+                                            .fill(bad ? AnyShapeStyle(badWeatherColor) : AnyShapeStyle(.background))
+                                            .frame(width: 24, height: 24)
+                                            .overlay(Circle().stroke(.separator, lineWidth: 0.5))
+                                            .shadow(radius: 2, y: 1)
+                                        Image(systemName: weatherIcon(for: summary.code))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .symbolRenderingMode(.monochrome)
+                                            .foregroundStyle(bad ? AnyShapeStyle(Color.white) : (summary.isHistorical ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange)))
+                                            .help(weatherTooltip(for: summary))
+                                    }
                                 }
+                                .frame(maxWidth: .infinity)
                             }
-                            .frame(maxWidth: .infinity)
                         }
-                    }
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 4)
-            if endTime != nil || endDate != nil {
-                VStack(alignment: .trailing, spacing: 2) {
-                    if let endDate {
-                        Text(formatDate(endDate))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    if let endTime {
-                        Text(endTime)
-                            .font(.caption.bold())
-                            .monospacedDigit()
-                    }
+                    )
+                    .frame(maxWidth: .infinity)
+                if let endTime {
+                    Text(endTime)
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                } else {
+                    Text("").frame(minWidth: 0)
                 }
             }
         }
@@ -1653,10 +1714,7 @@ private struct PlacePopover: View {
 
     private var bookableKinds: Set<String> {
         ["hotel", "ryokan", "accommodation",
-         "restaurant", "food", "dining",
-         "museum", "gallery", "architecture",
-         "onsen", "hot_spring", "bath",
-         "castle", "garden"]
+         "restaurant", "food", "dining"]
     }
 
     private var showsBookingButton: Bool {
@@ -1811,9 +1869,16 @@ private struct PlacePopover: View {
                    let mapsURL = googleMapsURL(coord: coord, name: feature.name) {
                     ActionIconLink(url: mapsURL, systemImage: "map.fill", helpText: "Open in Google Maps")
                 }
-                if let coord = feature.coordinates.first,
-                   let airbnbURL = airbnbSearchURL(coord: coord, name: feature.name) {
-                    ActionIconLink(url: airbnbURL, systemImage: "house.fill", helpText: "Search on Airbnb")
+                if feature.nights > 0,
+                   let kind = feature.kind?.lowercased(),
+                   ["city", "town", "village", "gallery", "island", "onsen"].contains(kind),
+                   let coord = feature.coordinates.first {
+                    let checkin = feature.days.first.flatMap { document.date(forDay: $0) }
+                    let checkout = feature.days.last.flatMap { document.date(forDay: $0) }
+                    if let airbnbURL = airbnbSearchURL(coord: coord, name: feature.name,
+                                                      checkin: checkin, checkout: checkout) {
+                        ActionIconLink(url: airbnbURL, systemImage: "house.fill", helpText: "Search on Airbnb")
+                    }
                 }
                 if let youtubeURL = youtubeSearchURL(for: feature) {
                     ActionIconLink(url: youtubeURL, systemImage: "play.rectangle.fill", helpText: "Search on YouTube")
